@@ -1,0 +1,227 @@
+{
+  "version": 1,
+  "basePath": "assets/music/",
+  "note": "Số thứ tự là vị trí trong thiệp. Chỉ điền tên hiển thị và nghệ sĩ khi đã xác định đúng bản thu.",
+  "tracks": [
+    {
+      "id": "me:0",
+      "path": "assets/music/0me.mp3",
+      "displayName": "Bản nhạc 01",
+      "artist": null,
+      "legacyFallback": "nhac_me.mp3"
+    },
+    {
+      "id": "me:1",
+      "path": "assets/music/1me.mp3",
+      "displayName": "Bản nhạc 02",
+      "artist": null
+    },
+    {
+      "id": "me:2",
+      "path": "assets/music/2me.mp3",
+      "displayName": "Bản nhạc 03",
+      "artist": null
+    },
+    {
+      "id": "me:3",
+      "path": "assets/music/3me.mp3",
+      "displayName": "Bản nhạc 04",
+      "artist": null
+    },
+    {
+      "id": "me:4",
+      "path": "assets/music/4me.mp3",
+      "displayName": "Bản nhạc 05",
+      "artist": null
+    },
+    {
+      "id": "me:5",
+      "path": "assets/music/5me.mp3",
+      "displayName": "Bản nhạc 06",
+      "artist": null
+    },
+    {
+      "id": "ba:0",
+      "path": "assets/music/0ba.mp3",
+      "displayName": "Bản nhạc 01",
+      "artist": null,
+      "legacyFallback": "nhac_ba.mp3"
+    },
+    {
+      "id": "ba:1",
+      "path": "assets/music/1ba.mp3",
+      "displayName": "Bản nhạc 02",
+      "artist": null
+    },
+    {
+      "id": "ba:2",
+      "path": "assets/music/2ba.mp3",
+      "displayName": "Bản nhạc 03",
+      "artist": null
+    },
+    {
+      "id": "ba:3",
+      "path": "assets/music/3ba.mp3",
+      "displayName": "Bản nhạc 04",
+      "artist": null
+    },
+    {
+      "id": "ba:4",
+      "path": "assets/music/4ba.mp3",
+      "displayName": "Bản nhạc 05",
+      "artist": null
+    },
+    {
+      "id": "ba:5",
+      "path": "assets/music/5ba.mp3",
+      "displayName": "Bản nhạc 06",
+      "artist": null
+    },
+    {
+      "id": "co:0",
+      "path": "assets/music/0co.mp3",
+      "displayName": "Bản nhạc 01",
+      "artist": null
+    },
+    {
+      "id": "co:1",
+      "path": "assets/music/1co.mp3",
+      "displayName": "Bản nhạc 02",
+      "artist": null
+    },
+    {
+      "id": "co:2",
+      "path": "assets/music/2co.mp3",
+      "displayName": "Bản nhạc 03",
+      "artist": null
+    },
+    {
+      "id": "co:3",
+      "path": "assets/music/3co.mp3",
+      "displayName": "Bản nhạc 04",
+      "artist": null
+    },
+    {
+      "id": "co:4",
+      "path": "assets/music/4co.mp3",
+      "displayName": "Bản nhạc 05",
+      "artist": null
+    },
+    {
+      "id": "co:5",
+      "path": "assets/music/5co.mp3",
+      "displayName": "Bản nhạc 06",
+      "artist": null
+    },
+    {
+      "id": "chi:0",
+      "path": "assets/music/0chi.mp3",
+      "displayName": "Bản nhạc 01",
+      "artist": null
+    },
+    {
+      "id": "chi:1",
+      "path": "assets/music/1chi.mp3",
+      "displayName": "Bản nhạc 02",
+      "artist": null
+    },
+    {
+      "id": "chi:2",
+      "path": "assets/music/2chi.mp3",
+      "displayName": "Bản nhạc 03",
+      "artist": null
+    },
+    {
+      "id": "chi:3",
+      "path": "assets/music/3chi.mp3",
+      "displayName": "Bản nhạc 04",
+      "artist": null
+    },
+    {
+      "id": "chi:4",
+      "path": "assets/music/4chi.mp3",
+      "displayName": "Bản nhạc 05",
+      "artist": null
+    },
+    {
+      "id": "chi:5",
+      "path": "assets/music/5chi.mp3",
+      "displayName": "Bản nhạc 06",
+      "artist": null
+    },
+    {
+      "id": "nu:0",
+      "path": "assets/music/0nu.mp3",
+      "displayName": "Bản nhạc 01",
+      "artist": null,
+      "legacyFallback": "music_under.mp3"
+    },
+    {
+      "id": "nu:1",
+      "path": "assets/music/1nu.mp3",
+      "displayName": "Bản nhạc 02",
+      "artist": null,
+      "legacyFallback": "music_over.mp3"
+    },
+    {
+      "id": "nu:2",
+      "path": "assets/music/2nu.mp3",
+      "displayName": "Bản nhạc 03",
+      "artist": null
+    },
+    {
+      "id": "nu:3",
+      "path": "assets/music/3nu.mp3",
+      "displayName": "Bản nhạc 04",
+      "artist": null
+    },
+    {
+      "id": "nu:4",
+      "path": "assets/music/4nu.mp3",
+      "displayName": "Bản nhạc 05",
+      "artist": null
+    },
+    {
+      "id": "nu:5",
+      "path": "assets/music/5nu.mp3",
+      "displayName": "Bản nhạc 06",
+      "artist": null
+    },
+    {
+      "id": "yeu:0",
+      "path": "assets/music/0yeu.mp3",
+      "displayName": "Bản nhạc 01",
+      "artist": null
+    },
+    {
+      "id": "yeu:1",
+      "path": "assets/music/1yeu.mp3",
+      "displayName": "Bản nhạc 02",
+      "artist": null
+    },
+    {
+      "id": "yeu:2",
+      "path": "assets/music/2yeu.mp3",
+      "displayName": "Bản nhạc 03",
+      "artist": null
+    },
+    {
+      "id": "yeu:3",
+      "path": "assets/music/3yeu.mp3",
+      "displayName": "Bản nhạc 04",
+      "artist": null
+    },
+    {
+      "id": "yeu:4",
+      "path": "assets/music/4yeu.mp3",
+      "displayName": "Bản nhạc 05",
+      "artist": null
+    },
+    {
+      "id": "yeu:5",
+      "path": "assets/music/5yeu.mp3",
+      "displayName": "Bản nhạc 06",
+      "artist": null
+    }
+  ]
+}

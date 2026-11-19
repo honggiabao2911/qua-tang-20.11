@@ -1,0 +1,1233 @@
+// 14. Tạo, thiết kế và chia sẻ thiệp.
+(() => {
+  'use strict';
+
+  const CONFIG = Object.freeze({
+    siteName: 'Gửi lời tri ân · Thiệp 20/11',
+    defaultSender: '',
+    maxMessageLength: 1000,
+    maxNameLength: 100,
+    maxPronounLength: 30,
+    maxCustomGreetingLength: 3000,
+    maxDedicationLength: 100,
+    maxFragmentLength: 60000,
+    effects: Object.freeze({ openingMs: 2800, petalsDesktop: 14, petalsMobile: 7 })
+  });
+
+  const RECIPIENTS = Object.freeze({
+    mom: { label: 'Mẹ', you: 'mẹ', pronoun: 'con', salutation: 'Mẹ thân yêu,', greetings: 'mom' },
+    grandma: { label: 'Bà', you: 'bà', pronoun: 'cháu', salutation: 'Bà kính yêu,', greetings: 'grandma' },
+    teacher: {
+      label: 'Thầy cô', defaultVariant: '', variantLabel: 'Bạn muốn gửi thiệp đến',
+      variants: {
+        // Older links use an empty variant for cô giáo.
+        '': { label: 'Cô giáo', you: 'cô', pronoun: 'em', greetings: 'teacher' },
+        thay: { label: 'Thầy giáo', you: 'thầy', pronoun: 'em', greetings: 'teacher', pairKey: 'teacher_male' }
+      }
+    },
+    sister: {
+      label: 'Chị / Em gái', defaultVariant: 'older', variantLabel: 'Bạn muốn gửi tới',
+      variants: {
+        older: { label: 'Chị gái', you: 'chị', pronoun: 'em', salutation: 'Chị thân mến,', greetings: 'sister_older' },
+        younger: { label: 'Em gái', you: 'em', pronoun: 'anh', salutation: 'Em thân mến,', greetings: 'sister_younger' }
+      }
+    },
+    lover: { label: 'Người thương', you: 'em', pronoun: 'anh', salutation: 'Em thương mến,', greetings: 'lover' },
+    friend: { label: 'Bạn bè', you: 'bạn', pronoun: 'mình', salutation: 'Bạn thân mến,', greetings: 'friend' },
+    women: {
+      label: 'Những người phụ nữ', defaultVariant: 'group', variantLabel: 'Lời chúc này dành cho',
+      variants: {
+        friend: { label: 'Một người bạn nữ', you: 'bạn', pronoun: 'mình', salutation: 'Bạn thân mến,', greetings: 'friend' },
+        one: { label: 'Một người phụ nữ', you: 'bạn', pronoun: 'tôi', salutation: 'Bạn thân mến,', greetings: 'women_one' },
+        group: { label: 'Một nhóm phụ nữ', you: 'mọi người', pronoun: 'tôi', salutation: 'Mọi người thân mến,', greetings: 'women_group' }
+      }
+    }
+  });
+
+  const OCCASIONS = {
+    teachersDay: { date: '20/11', name: 'Ngày Nhà giáo Việt Nam' },
+    womensDay: { date: '20/10', name: 'Ngày Phụ nữ Việt Nam' }
+  };
+  const occasionFor = card => OCCASIONS[card.design.occasion];
+  const newOccasionFor = target => target === 'teacher' ? 'teachersDay' : 'womensDay';
+
+  const $ = (id) => document.getElementById(id);
+  const screens = {
+    home: $('home-screen'), editor: $('editor-screen'),
+    envelope: $('envelope-screen'), letter: $('letter-screen')
+  };
+  const fields = {
+    recipientName: $('recipient-name'), senderName: $('sender-name'),
+    pronoun: $('sender-pronoun'), recipientPronoun: $('recipient-pronoun'), message: $('personal-message')
+  };
+  const recipientButtons = [...document.querySelectorAll('[data-recipient]')];
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const variantMemory = { teacher: '', sister: 'older', women: 'friend' };
+  $('theme-filter').querySelector('[value=all]').textContent=`Tất cả ${Object.keys(CardThemes.catalog).length} không gian`;
+  $('theme-gallery').setAttribute('aria-label',`Thư viện ${Object.keys(CardThemes.catalog).length} cảnh mở quà`);
+  CardThemes.mount({gallery: $('theme-gallery'), stage: $('theme-stage'), backdrop: $('theme-backdrop')});
+  let state = makeDefaultState();
+  let helperUndo=null;
+  let screen = 'home';
+  let shared = false;
+  let pronounEdited = false;
+  let opening = false;
+  let openingTimer = 0;
+  let petalTimer = 0;
+  let toastTimer = 0;
+  const signaturePad=CardSignature.mount($('signature-pad'),{onChange:ink=>{state.design.signatureInk=ink;renderCard();}});
+  BouquetArrival.mount($('bouquet-arrival'),{onOpen:openEnvelope});
+  const hasArrival=()=>state.design.arrival!=='classic';
+  let bebePhase='idle',arrivalEdited=false;
+  const bebe=window.BebeWelcome?.mount($('bebe-welcome'),{onFlowers:presentBebeFlowers,onSkip:skipBebe,onSound:()=>CardMusic.toggleWelcome(),onGreet:()=>CardMusic.greetWelcome()});
+  const welcomeEditor=WelcomeStudio.mount({onChange:lines=>{state.design.welcomeLines=lines;renderCard();}});
+  const studioHelper=WelcomeStudio.helper({getContext:()=>({target:state.target,variant:state.variant,recipientName:state.recipientName,screen,arrival:state.design.arrival,welcome:state.design.welcome,experience:state.design.experience,musicGroup:state.design.musicGroup,musicId:state.musicId,pronoun:state.pronoun,recipientPronoun:state.recipientPronoun}),onAction:handleStudioHelp});
+  const hasBebe=()=>Boolean(bebe)&&state.design.welcome==='bebe'&&hasArrival();
+  const flowersVisible=()=>arrivalActive()&&(!hasBebe()||bebePhase==='flowers');
+  let arrivalPassed=false;
+  const arrivalActive=()=>hasArrival()&&!arrivalPassed;
+
+  const DESIGN_OPTIONS = Object.freeze({
+    theme: ['rose', 'sage', 'champagne', 'midnight', 'teal', 'lilac'],
+    font: ['serif', 'sans', 'italic', 'handwriting'], layout: ['classic', 'centered'],
+    decoration: ['botanical', 'stars', 'minimal'], effect: ['petals', 'constellation', 'butterflies', 'none', 'fireflies', 'hearts', 'bubbles'],
+    scene: ['bouquet', 'galaxy', 'envelope', 'stardust', 'aurora', 'bloom', 'rose', 'sunrise', 'lotus', 'moonlight', 'butterflies', 'layers', 'crystal', 'orbits', ...Object.keys(GiftScenes.catalog)],
+    structure: ['letter', 'arch', 'postcard', 'folded'], ornament: ['botanical', 'orbit', 'pressed'],
+    intensity: ['cinematic', 'medium', 'gentle', 'off'], experience: ['', ...Object.keys(CardThemes.catalog)],
+    arrival:['stardust','growing','classic'],welcome:['none','bebe'],welcomeMusic:['on','off'],signatureStyle:['classic','script','minimal','seal'],
+    occasion: Object.keys(OCCASIONS),
+    size: ['small', 'medium', 'large'], reveal: ['instant', 'gentle', 'slow'], showDate: ['on', 'off'], showSignature: ['on', 'off']
+  });
+  const TONES = { all: 'Tất cả lời gợi ý', short: 'Ngắn gọn', warm: 'Ấm áp', playful: 'Vui vẻ', moving: 'Xúc động', sweet: 'Ngọt ngào', romantic: 'Lãng mạn' };
+  const OPENING_NAMES = { bouquet:'Bó hoa bung nở',galaxy:'Vườn sao',envelope:'Mở phong thư',stardust:'Bụi sao hội tụ',aurora:'Dải sáng cực quang',bloom:'Cành lá hé mở',rose:'Nụ hồng bung nở',sunrise:'Nắng qua khung cửa',lotus:'Cánh sen trên nước',moonlight:'Trăng soi mặt hồ',butterflies:'Cánh bướm hé lời thương',layers:'Các lớp ngọc trai',crystal:'Trái tim pha lê',orbits:'Hai quỹ đạo gặp nhau' };
+  const DESIGN_NAMES = { structure: {letter:'Thư tay',arch:'Thiệp đứng',postcard:'Toàn cảnh',folded:'Thiệp gập'}, theme: {rose:'Hồng sương',sage:'Vườn xanh',champagne:'Champagne',midnight:'Đêm ánh kim',teal:'Ngọc xanh',lilac:'Tím thạch anh'} };
+  function defaultDesign(legacy = false) {
+    return { occasion:'womensDay',theme:'rose',font:'serif',layout:'classic',decoration:'botanical',effect:'petals',dedication:'',body:'',scene:'bouquet',structure:'arch',ornament:'botanical',intensity:'cinematic',experience:legacy?'':'sunflower',size:'medium',reveal:'gentle',showDate:'on',showSignature:'on',secret:'',giftIntro:'',flowerNotes:'[]',arrival:legacy?'classic':'growing',welcome:legacy?'none':'bebe',welcomeText:'',welcomeName:'bé B',welcomeMusic:'on',signatureText:'',signatureInk:'',signatureStyle:legacy?'classic':'script',welcomeLines:'',musicGroup:'' };
+  }
+  function recommendedArrival(id){return ['galaxy','lovegalaxy','aurora','moonlake','ocean','lantern','lightbridge','crystal','lotusmoon'].includes(id)?'stardust':'growing';}
+  function themeDesign(id) {
+    const preset = CardThemes.catalog[id];
+    const dark = ['galaxy','aurora','moonlake','lovegalaxy'].includes(id);
+    return {experience:id,theme:preset.palette || (dark?'midnight':'rose'),scene:preset.opening,structure:preset.structure || 'arch',ornament:preset.ornament || (dark?'orbit':'botanical'),effect:preset.effect || (dark?'constellation':id==='butterfly'?'butterflies':'petals'),decoration:dark?'stars':id==='letter'||id==='pearl'?'minimal':'botanical',font:preset.font || 'serif',layout:id==='pearl'?'centered':'classic',intensity:'cinematic'};
+  }
+  function applyTheme(id) {
+    if (!Object.hasOwn(CardThemes.catalog,id)) return;
+    Object.assign(state.design,themeDesign(id));
+    if(state.design.flowerNotes==='[]'&&CardThemes.catalog[id].defaultNotes)state.design.flowerNotes=JSON.stringify(CardThemes.catalog[id].defaultNotes);
+    if(state.design.welcome==='bebe'&&!arrivalEdited)state.design.arrival=recommendedArrival(id);
+    renderDesignControls(); renderCard();
+  }
+  function normalizeText(value) { return value.normalize('NFC'); }
+
+  function makeDefaultState() {
+    return {
+      target: 'teacher', variant: '', recipientName: '', senderName: CONFIG.defaultSender,
+      pronoun: 'em', recipientPronoun: 'cô', tone: 'all', greeting: '', sampleIndex: 0, message: '',
+      musicId: 'teacher:0', volume: 30, design: { ...defaultDesign(), ...themeDesign(CardThemes.defaults.teacher), occasion: 'teachersDay' }
+    };
+  }
+
+  function recipientFor(card = state) {
+    const recipient = RECIPIENTS[card.target];
+    return recipient.variants ? recipient.variants[card.variant] : recipient;
+  }
+
+  function pairKey(card = state) {
+    const recipient = recipientFor(card);
+    return recipient.pairKey || recipient.greetings;
+  }
+
+  function samplesFor(card = state) {
+    const all = CardGreetings.templates[recipientFor(card).greetings];
+    const filtered = all.filter(template => card.tone === 'all' || template.tone === card.tone);
+    return filtered.length ? filtered : all;
+  }
+  function renderPairs() {
+    const pairs = CardGreetings.getPairs(pairKey());
+    const select = $('pair-field'); select.replaceChildren();
+    for (const pair of pairs) select.add(new Option(pair.label, pair.id));
+    select.add(new Option('Tùy chỉnh cách xưng và cách gọi', 'custom'));
+    select.value = pairs.find(pair => pair.self === state.pronoun && pair.you === state.recipientPronoun)?.id || 'custom';
+    $('lover-call-group').hidden = state.target !== 'lover';
+    $('lover-call').value = ['em yêu','anh yêu','người thương'].includes(state.recipientPronoun) ? state.recipientPronoun : '';
+    $('tone-field').replaceChildren();
+    for (const [key,label] of Object.entries(TONES)) {
+      if (state.target !== 'lover' && ['sweet','romantic'].includes(key)) continue;
+      $('tone-field').add(new Option(label,key));
+    }
+    $('tone-field').value = state.tone;
+  }
+  function resetPair() {
+    const pair = CardGreetings.defaultPair(pairKey());
+    state.pronoun = pair.self; state.recipientPronoun = pair.you;
+    state.tone = 'all'; state.sampleIndex = 0; state.greeting = '';
+    fields.pronoun.value = state.pronoun; fields.recipientPronoun.value = state.recipientPronoun;
+    renderPairs();
+    if (state.design.body.trim()) $('content-change-notice').hidden = false;
+  }
+
+  function cardText(card = state) {
+    const recipient = recipientFor(card);
+    const name = card.recipientName.trim();
+    const self = card.pronoun.trim() || recipient.pronoun;
+    const you = card.recipientPronoun.trim() || recipient.you;
+    const template = samplesFor(card)[card.sampleIndex] || samplesFor(card)[0];
+    const cap = value => value.charAt(0).toLocaleUpperCase('vi-VN') + value.slice(1);
+    const salutation = card.target === 'lover' ? (['anh','em','cậu'].includes(you) ? `${cap(you)} thương mến,` : `Gửi ${you},`) : card.target === 'teacher' ? `${cap(you)} kính mến,` : ['mom','grandma'].includes(card.target) ? `${cap(you)} yêu thương,` : `${cap(you)} thân mến,`;
+    return {recipient: name ? `Gửi ${name},` : salutation, envelopeRecipient:`Gửi ${name || you}`,
+      greeting:card.design.body.trim() || card.greeting || CardGreetings.render(template,{self,you}),
+      message:card.message.trim(), sender:card.senderName.trim(), template};
+  }
+
+  function showToast(message, persistent = false) {
+    window.clearTimeout(toastTimer);
+    const toast = $('toast');
+    toast.textContent = message;
+    toast.hidden = false;
+    toast.dataset.persistent = String(persistent);
+    if (!persistent) toastTimer = window.setTimeout(() => { toast.hidden = true; }, 5500);
+  }
+
+  function focusElement(element, centered = false) {
+    const previous=document.activeElement;
+    window.requestAnimationFrame(() => {
+      if(document.activeElement!==previous&&document.activeElement?.matches('input,textarea,select,[contenteditable=true]'))return;
+      if (!element || element.closest('[hidden]')) return;
+      for(let parent=element.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;
+      element.focus({ preventScroll: true });
+      if (centered) element.scrollIntoView({ behavior: reducedMotion.matches ? 'auto' : 'smooth', block: 'center' });
+    });
+  }
+
+  function cancelOpening() {
+    window.clearTimeout(openingTimer);
+    openingTimer = 0;
+    opening = false;
+    CardThemes.reset();
+    BouquetArrival.hide();bebe?.hide();
+    if ($('bouquet-letter-open')) $('bouquet-letter-open').disabled=false;
+    if ($('open-theme-card')) $('open-theme-card').disabled = false;
+    ['envelope-stage', 'bouquet-stage', 'galaxy-stage'].forEach(id => {
+      $(id).classList.remove('is-opening');
+      $(id).removeAttribute('aria-busy');
+    });
+    $('skip-animation').hidden = true;
+    ['open-envelope', 'open-bouquet', 'open-galaxy', 'envelope-open-button'].forEach(id => { $(id).disabled = false; });
+  }
+
+  function showScreen(next, focus = true) {
+    cancelOpening();
+    if (next !== 'letter') {
+      window.clearTimeout(petalTimer);
+      $('petal-burst').replaceChildren();
+    }
+    if ((next === 'editor' || next === 'home') && screen !== next) CardMusic.stopOnPageHide();
+    if(next!=='editor')CardMusic.leaveStudio();
+    screen = next;
+    studioHelper.show(next==='editor'||next==='home');
+    if(next==='envelope'){arrivalPassed=false;bebePhase=hasBebe()?'story':'idle';renderCard();}
+    $('envelope-screen').dataset.journeyPhase=next==='envelope'?(hasBebe()?'bebe':arrivalActive()?'bouquet':'theme'):'idle';
+    Object.entries(screens).forEach(([key, element]) => { element.hidden = key !== next; });
+    document.body.dataset.screen = next;
+    CardThemes.setScreen(arrivalActive() && next==='envelope'?'editor':next);
+    if(next==='envelope'&&hasBebe()){bebe.show(bebeSettings());CardMusic.enterWelcome({enabled:state.design.welcomeMusic==='on'});}
+    else {CardMusic.leaveWelcome();if(next==='envelope'&&arrivalActive())showBouquet();else BouquetArrival.hide();}
+    if(next==='editor')CardMusic.enterStudio();
+    if (next !== 'letter') { $('secret-content').hidden = true; $('secret-reveal-button').setAttribute('aria-expanded','false'); }
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    if (focus && next !== 'home') focusElement($(`${next}-title`));
+  }
+
+  function removeFragment() {
+    if (!window.location.hash) return;
+    try {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    } catch (_) {
+      window.location.hash = '';
+    }
+  }
+
+  function resetCard() {
+    state = makeDefaultState();arrivalEdited=false;
+    $('theme-filter').value='recipient';
+    pronounEdited = false;
+    shared = false;
+    variantMemory.teacher = '';
+    variantMemory.sister = 'older';
+    variantMemory.women = 'friend';
+    $('manual-copy-panel').hidden = true;
+    removeFragment();
+    renderEditor();
+    renderCard();
+  }
+
+  function goHome(anchor) {
+    GiftScenes.closePreview();
+    if (shared) resetCard();
+    showScreen('home', false);
+    if (anchor) {
+      window.requestAnimationFrame(() => {
+        const element = $(anchor);
+        if (element) {
+          const focusTarget = anchor === 'recipients' ? $('recipients-title') : element;
+          focusTarget.tabIndex = -1;
+          focusTarget.focus({ preventScroll: true });
+          element.scrollIntoView({ behavior: reducedMotion.matches ? 'auto' : 'smooth', block: 'start' });
+        }
+      });
+    }
+  }
+
+  function updateSelectedRecipients() {
+    recipientButtons.forEach((button) => {
+      const selected = button.dataset.recipient === state.target && (!button.dataset.variant || button.dataset.variant === state.variant);
+      button.classList.toggle('is-selected', selected);
+      button.setAttribute('aria-pressed', String(selected));
+    });
+  }
+
+  function renderVariants() {
+    const config = RECIPIENTS[state.target];
+    const select = $('variant-field');
+    $('variant-group').hidden = !config.variants;
+    select.replaceChildren();
+    if (!config.variants) return;
+    $('variant-label').textContent = config.variantLabel;
+    Object.entries(config.variants).forEach(([value, variant]) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = variant.label;
+      select.append(option);
+    });
+    select.value = state.variant;
+  }
+
+  function updateMessageCount() {
+    const tooLong = state.message.length > CONFIG.maxMessageLength;
+    $('message-count').textContent = `${state.message.length.toLocaleString('vi-VN')} / ${CONFIG.maxMessageLength.toLocaleString('vi-VN')}`;
+    $('message-error').textContent = tooLong ? 'Lời nhắn không được vượt quá 1.000 ký tự.' : '';
+    $('message-error').hidden = !tooLong;
+    fields.message.setAttribute('aria-invalid', String(tooLong));
+  }
+
+  function renderEditor() {
+    const recipient = recipientFor();
+    $('editor-title').textContent = `Một lời chúc dành cho ${recipient.you}`;
+    $('selected-recipient-label').textContent = recipient.label;
+    Object.entries(fields).forEach(([key, field]) => { field.value = state[key]; });
+    updateSelectedRecipients();
+    renderVariants();
+    renderPairs();
+    renderDesignControls();
+    CardMusic.setStudioGroup(state.target);
+    $('recipient-music-group').value=state.design.musicGroup;
+    $('recipient-music-group').querySelector('[value=""]').textContent=`Theo người nhận (${recipientFor().label})`;
+    CardMusic.setGroup(state.design.musicGroup||state.target, state.musicId);
+    CardMusic.setVolume(state.volume);
+    updateMessageCount();
+    renderCard();
+    studioHelper.contextChanged?.();
+  }
+
+  function renderDesignControls() {
+    $('arrival-style').value=state.design.arrival;
+    $('welcome-mode').value=state.design.welcome;
+    $('welcome-text').value=state.design.welcomeText;
+    $('welcome-name').value=state.design.welcomeName;
+    $('welcome-music').checked=state.design.welcomeMusic==='on';
+    $('signature-text').value=state.design.signatureText;$('signature-style').value=state.design.signatureStyle;signaturePad.setValue(state.design.signatureInk);
+    $('card-dedication').value = state.design.dedication;
+    $('custom-greeting').value = state.design.body;
+    $('decoration-field').value = state.design.decoration;
+    $('effect-field').value = state.design.effect;
+    renderOpeningOptions();
+    ['scene', 'ornament', 'intensity', 'size', 'reveal'].forEach(key => { $(`${key}-field`).value = state.design[key]; });
+    $('secret-message').value = state.design.secret;
+    $('gift-intro').value=state.design.giftIntro;
+    const flowerNotes=JSON.parse(state.design.flowerNotes || '[]');
+    for(let i=0;i<5;i++)$(`flower-note-${i}`).value=flowerNotes[i] || '';
+    $('show-date').checked = state.design.showDate === 'on';
+    $('show-signature').checked = state.design.showSignature === 'on';
+    updateDesignCount();
+    updateDesignButtons();
+  }
+
+  function updateDesignButtons() {
+    for (const key of ['theme', 'font', 'layout', 'structure']) {
+      document.querySelectorAll(`[data-${key}-choice]`).forEach(button => {
+        button.setAttribute('aria-pressed', String(button.getAttribute(`data-${key}-choice`) === state.design[key]));
+      });
+    }
+    document.querySelectorAll('[data-theme-preset]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.themePreset === state.design.experience)));
+  }
+  function renderOpeningOptions() {
+    const preset = CardThemes.catalog[state.design.experience];
+    const choices = preset ? preset.compatibleOpenings : ['bouquet','galaxy','envelope'];
+    $('scene-field').replaceChildren(...choices.map(value => new Option(OPENING_NAMES[value] || CardThemes.catalog[value]?.name || value,value)));
+    if (!choices.includes(state.design.scene)) state.design.scene = preset?.opening || 'envelope';
+    const effects = ['petals','constellation','butterflies','none','fireflies','hearts','bubbles'];
+    if (!effects.includes(state.design.effect)) state.design.effect = preset?.effect || 'petals';
+    const labels = {petals:'Cánh hoa bay nhẹ',constellation:'Sao nhỏ lấp lánh',butterflies:'Cánh bướm bay quanh',none:'Không thêm chuyển động',fireflies:'Đom đóm trong vườn đêm',hearts:'Trái tim gửi người thương',bubbles:'Bọt ngọc giữa biển sao'};
+    $('effect-field').replaceChildren(...effects.map(value => new Option(labels[value],value)));
+    $('effect-field').value = state.design.effect;
+  }
+
+  function updateDesignCount() {
+    const length = state.design.body.length;
+    $('custom-greeting-count').textContent = `${length.toLocaleString('vi-VN')} / ${CONFIG.maxCustomGreetingLength.toLocaleString('vi-VN')}`;
+    const tooLong = length > CONFIG.maxCustomGreetingLength;
+    $('custom-greeting-error').hidden = !tooLong;
+    $('custom-greeting-error').textContent = tooLong ? 'Lời chúc riêng không được vượt quá 3.000 ký tự.' : '';
+    $('custom-greeting').setAttribute('aria-invalid', String(tooLong));
+  }
+
+  function applyDesign() {
+    const design = state.design;
+    const modern = Boolean(design.experience);
+    document.querySelectorAll('.paper').forEach(paper => {
+      ['theme','font','layout','decoration','scene','structure','ornament','intensity','experience','size','reveal'].forEach(key => {paper.dataset[key]=design[key];});
+      if (!modern) delete paper.dataset.experience;
+      paper.querySelectorAll('.paper-date').forEach(date => {date.hidden=design.showDate==='off';});
+    });
+    ['envelope','bouquet','galaxy'].forEach(scene => {
+      const stage=$(`${scene}-stage`);stage.hidden=arrivalActive() || modern || scene!==design.scene;
+      stage.dataset.theme=design.theme;stage.dataset.intensity=design.intensity;
+    });
+    $('theme-stage').hidden=arrivalActive() || !modern; $('theme-backdrop').hidden=!modern;
+    $('envelope-screen').dataset.scene=design.scene; $('letter-screen').dataset.scene=design.scene;
+    $('letter-screen').classList.toggle('immersive-scene',!modern && design.scene!=='envelope');
+    $('cosmic-garden').hidden=modern || design.scene==='envelope';
+    CardThemes.apply(design);
+    $('bouquet-arrival').hidden=!flowersVisible();
+    $('envelope-open-button').hidden=arrivalActive();
+    $('gift-freeze').hidden=arrivalActive() || $('gift-freeze').hidden;
+    $('envelope-screen').classList.toggle('has-bouquet-arrival',arrivalActive());
+    $('letter-screen').dataset.fromBouquet=String(hasArrival());
+    $('letter-screen').classList.toggle('has-theme-experience',modern);
+    if (!modern) $('letter-screen').removeAttribute('data-experience');
+    document.querySelector('.mini-stage').dataset.scene=design.scene;
+    document.querySelector('.mini-stage').dataset.experience=design.experience;
+    $('design-summary').textContent=`${CardThemes.catalog[design.experience]?.name || OPENING_NAMES[design.scene]} · ${DESIGN_NAMES.structure[design.structure]} · ${DESIGN_NAMES.theme[design.theme]}`;
+    document.querySelector('.envelope-hint').textContent=modern?'Chạm vào món quà để mở một thế giới dành riêng.':'Chạm để mở món quà của bạn.';
+    document.body.dataset.cardTheme=design.theme;
+    ['preview','letter'].forEach(prefix => {$(`${prefix}-dedication`).textContent=design.dedication;});
+    document.querySelectorAll('.letter-sprig').forEach(sprig => {sprig.style.visibility=!modern && design.decoration==='botanical'?'':'hidden';});
+    $('use-template').hidden=!design.body;
+    $('gift-configuration').hidden=!GiftScenes.has(design.experience);
+    $('flower-notes-fields').hidden=design.experience!=='wishtree'&&!CardThemes.catalog[design.experience]?.supportsNotes;
+    $('secret-note').hidden=!design.secret.trim(); $('secret-content').textContent=design.secret;
+    renderWelcomeGuide();
+    renderThemeRecommendations();
+    renderEffectGuide();
+    renderJourneyGuide();
+    updateDesignButtons();
+  }
+
+  function setArrival(value){arrivalEdited=true;state.design.arrival=value;if(value==='classic')state.design.welcome='none';renderDesignControls();renderCard();}
+  function bebeSettings(){return {date:occasionFor(state).date,target:state.target,variant:state.variant,recipientName:state.recipientName,senderName:state.senderName,recipientPronoun:state.recipientPronoun,welcomeText:state.design.welcomeText,welcomeLines:state.design.welcomeLines,welcomeName:state.design.welcomeName,theme:state.design.theme,intensity:state.design.intensity};}
+  function showBouquet(){BouquetArrival.show({date:occasionFor(state).date,style:state.design.arrival,intensity:state.design.intensity,recipient:cardText().envelopeRecipient,sender:state.senderName.trim()});}
+  function presentBebeFlowers(){
+    if(screen!=='envelope'||!hasBebe()||bebePhase==='flowers')return;
+    bebePhase='flowers';renderCard();$('envelope-screen').dataset.journeyPhase='bouquet';showBouquet();
+  }
+  function skipBebe(){if(screen!=='envelope')return;CardMusic.openGesture();revealLetter();}
+  function renderWelcomeGuide(){
+    const enabled=state.design.welcome==='bebe'&&Boolean(window.BebeWelcome);
+    $('welcome-text').disabled=!enabled;$('welcome-name').disabled=!enabled;$('welcome-music').disabled=!enabled;
+    welcomeEditor.render(state.design.welcomeLines,bebeSettings(),enabled);
+    $('welcome-legacy-extra').hidden=Boolean(state.design.welcomeLines);
+    const character=window.BebeWelcome?.nameFor(bebeSettings())||'bé B';
+    $('welcome-name-label').textContent=character;$('welcome-settings-title').textContent=character+' mang lời thương đến.';
+    $('welcome-option').textContent=character+' tặng hoa';$('welcome-dialogue-sample').hidden=!enabled;
+    if(enabled&&window.BebeWelcome){const lines=window.BebeWelcome.linesFor(bebeSettings());$('welcome-dialogue-sample').textContent=`${character} sẽ nói ${lines.length} câu. ${state.design.welcomeLines?'Bạn đã viết lời riêng.':'Lời gợi ý thay đổi theo người nhận.'} Xem thử để đọc từng câu cùng biểu cảm.`;}
+    $('preview-welcome').textContent=enabled?`Xem ${character} → hoa → thiệp`:'Xem cách mở thiệp đã chọn';
+  }
+
+  const EFFECT_DESCRIPTIONS={
+    petals:'Khi mở phần đọc, cánh hoa bay nhẹ ở mép thiệp; vài cánh hoa tiếp tục trôi trên nền.',
+    constellation:'Khi mở phần đọc, sao nhỏ lóe sáng ở mép thiệp và lấp lánh trên nền.',
+    butterflies:'Khi mở phần đọc, những cánh bướm bay quanh mép thiệp; không che lời chúc.',
+    fireflies:'Những đốm đom đóm vàng xanh thở sáng ở mép thiệp, như một khu vườn đêm.',
+    hearts:'Những trái tim nhỏ màu hồng trôi nhẹ bên lời thương.',
+    bubbles:'Bọt ngọc trong suốt nổi chậm, như một lời chúc từ biển sao.',
+    none:'Không thêm hạt trang trí bay quanh chữ. Cảnh chủ đề vẫn hiện đầy đủ.'
+  };
+  function renderEffectGuide(replay=false){
+    const demo=$('effect-preview-stage'),effect=state.design.effect;
+    $('effect-description').textContent=EFFECT_DESCRIPTIONS[effect]+(state.design.intensity==='off'?' Bạn đang tắt chuyển động.':' Chọn “Xem thử” để nhìn trước; giảm chuyển động sẽ hiện bản tĩnh.');
+    const key=`${effect}:${state.design.intensity}:${reducedMotion.matches}`;
+    if(!replay&&demo.dataset.previewKey===key)return;
+    demo.dataset.previewKey=key;demo.dataset.effect=effect;demo.dataset.intensity=state.design.intensity;
+    const particles=$('effect-preview-particles');particles.replaceChildren();
+    document.querySelectorAll('.reading-ambience i').forEach((node,i)=>{node.style.setProperty('--x',`${i%2?94+(i%5):1+(i%5)}%`);node.innerHTML=['butterflies','constellation','fireflies','hearts','bubbles'].includes(effect)?`<svg viewBox="0 0 48 48" aria-hidden="true">${CardThemes.effectGlyph(effect)}</svg>`:'';});
+    if(effect==='none')return;
+    const glyph=CardThemes.effectGlyph(effect);
+    for(let i=0;i<6;i++){
+      const particle=document.createElement('span');particle.style.cssText=`--x:${8+i*16}%;--delay:${i*.1}s;--turn:${i%2?-30:20}deg`;
+      particle.innerHTML=`<svg viewBox="0 0 48 48" aria-hidden="true">${glyph}</svg>`;particles.append(particle);
+    }
+  }
+
+  const READING_NOTES={
+    teacherbloom:'Chạm vào những bông hoa có số để mở từng lời nhắn gửi cô.',
+    teachingbook:'Những trang sách ở lại cùng khu vườn giấy và lời biết ơn.',
+    chalkconstellation:'Nét phấn hóa thành chòm hoa sáng bên lời tri ân.',
+    motherhug:'Vòng tay mẹ con ở lại cùng lời chúc; những bông hoa khẽ thở quanh một cái ôm.',grandmatea:'Bà và cháu cùng ngồi bên ấm trà; nắng và hơi trà nhẹ bay bên lời thương.',classroom:'Cô đứng bên bảng phấn nở hoa, giữ một lời cảm ơn bên bục giảng.',sisterswing:'Hai chị em trên chiếc xích đu; tán hoa khẽ lay cùng những chuyện nhỏ.',friendpicnic:'Hai người bạn và giỏ hoa vẫn ở dưới vòm lá, cùng một buổi hẹn nhiều nắng.',lovewaltz:'Hai người giữ một điệu valse nhỏ giữa quỹ đạo sao và những trái tim.',
+    dandelion:'Bồ công anh và những đom đóm giữ ước nguyện bên lời chúc.',teacup:'Tách trà hoa ở lại, hơi trà chậm rãi bay lên như một cái ôm ấm.',seabottle:'Lọ thư và bọt ngọc vẫn ở đây, giữa biển đêm dịu sáng.',starcrane:'Hạc giấy ôm chòm sao; đôi cánh nhẹ thở bên lời thương.',
+    glassgarden:'Lồng kính và khu vườn nhỏ ở lại; những hạt sáng khẽ lay quanh hoa.',wisteria:'Tử đằng đung đưa dưới vòm, giữ một khoảng trời tím bên lời chúc.',lotusmoon:'Cánh sen giữ dáng dưới trăng; gợn sáng chậm rãi trên mặt hồ.',sunmail:'Hoa hướng dương và hộp thư ở lại cùng những đám mây trôi nhẹ.',lavender:'Những nhành oải hương khẽ nghiêng trong nắng mật ong.',heartgarden:'Hai cánh tim mở, khu vườn và những đốm sáng ở lại bên lời thương.',
+    umbrella:'Ô vẫn che bó hoa; những hạt mưa sáng tiếp tục rơi quanh lời chúc.',
+    storybook:'Cuốn sách vẫn mở với khu vườn giấy, cây và hoa ở lại cùng lời chúc.',
+    island:'Hòn đảo, cây và những bông hoa vẫn lơ lửng trên mây khi đọc thiệp.',
+    ocean:'Vỏ trai, ngọc và bó hoa pha lê ở lại; chạm mặt nước để tạo gợn sáng.',
+    balloon:'Khinh khí cầu neo lại cùng giỏ hoa, đung đưa nhẹ khi đọc lời chúc.',
+    lantern:'Đèn lồng vẫn bay và vòng hoa tiếp tục tỏa sáng cạnh tấm thiệp.',
+    wishtree:'Cây giữ nguyên tán hoa; chạm các bông hoa có số để đọc lời nhắn riêng.',
+    silk:'Lụa và bó hoa vẫn ở lại sau khi tháo nơ, cùng những ánh sáng dịu.',
+    lightbridge:'Cây cầu và vòm hoa vẫn sáng dưới bầu trời sao khi đọc thiệp.',
+    musicbox:'Hộp nhạc vẫn mở; vòng hoa tiếp tục xoay cùng bản nhạc đã chọn.',
+    galaxy:'Ngân hà, quỹ đạo và sao vẫn lấp lánh; chạm để nối một chòm sao.',
+    lovegalaxy:'Trái tim sao và hai quỹ đạo vẫn chuyển động quanh lời yêu thương.',
+    aurora:'Dải cực quang vẫn chảy qua bầu trời; chạm để thêm một dải sáng.',
+    garden:'Cành lá và hoa xanh ở lại; chạm để một cụm hoa nở thêm.',
+    rose:'Vườn hồng vẫn hiện diện; chạm để thả cánh hồng bay.',
+    sunflower:'Ô cửa vẫn mở đón nắng, những bông cúc ở lại bên lời chúc.',
+    lotus:'Sen vẫn nở trên mặt hồ; chạm để mặt nước gợn sáng.',
+    moonlake:'Ánh trăng và những gợn nước tiếp tục chuyển động trên hồ.',
+    butterfly:'Hoa vẫn nở và những cánh bướm tiếp tục bay bên tấm thiệp.',
+    letter:'Lá thư, dấu sáp và nhành hoa khô ở lại; chạm dấu sáp để thấy điều nhỏ xinh.',
+    pearl:'Ngọc trai và lớp lụa óng ánh vẫn ở cạnh lời chúc.',
+    crystal:'Trái tim pha lê giữ ánh sáng và nhịp đập dịu bên lời thương.'
+  };
+  function renderJourneyGuide(){
+    for(const style of ['stardust','growing']){const host=$(`arrival-${style}-picture`);if(!host.firstChild)host.innerHTML=BouquetArrival.thumbnail(style);}
+    const id=state.design.experience,theme=CardThemes.catalog[id];
+    const description=READING_NOTES[id]||'Cảnh đã chọn ở lại cùng lời chúc.';
+    $('journey-description').textContent=theme?`${hasBebe()?(window.BebeWelcome.nameFor(bebeSettings())+' → Bó hoa → '+theme.name+' → Lời chúc'):((hasArrival()?'Bó hoa → ':'')+theme.name+' → Lời chúc')}. ${description}`:'Mở món quà rồi đọc lời chúc.';
+    $('reading-world-caption').hidden=!theme;
+    $('reading-world-title').textContent=theme?.name||'';
+    $('reading-world-description').textContent=description;
+    $('letter-screen').style.setProperty('--reading-world-bg',theme?.background||'#fff8f1');
+    $('letter-screen').dataset.ambient=state.design.effect;
+    $('letter-screen').dataset.intensity=state.design.intensity;
+    document.querySelectorAll('[data-arrival-choice]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.arrivalChoice===state.design.arrival)));
+    const picture=$('arrival-classic-picture');
+    if(theme&&picture.dataset.experience!==id){picture.dataset.experience=id;picture.style.background=theme.background;picture.innerHTML=GiftScenes.has(id)?`<span class="gift-scene gift-motion-off" data-phase="ready">${CardThemes.renderArt(id,'thumb')}</span>`:CardThemes.renderArt(id,'thumb');}
+    $('arrival-classic-name').textContent=theme?`Vào thẳng ${theme.name}`:'Vào thẳng cảnh đã chọn';
+  }
+
+  function renderOccasion(root = document) {
+    const {date, name} = occasionFor(state);
+    root.querySelectorAll('[data-card-date]').forEach(node => { node.textContent = date.replace('/', '.'); });
+    root.querySelectorAll('[data-card-occasion]').forEach(node => { node.textContent = name; });
+  }
+
+  // User content is always inserted as text, never HTML.
+  function renderCard() {
+    const text = cardText();
+    const {date, name} = occasionFor(state);
+    applyDesign();
+    renderOccasion();
+    $('arrival-occasion').textContent = `Một lời tặng ngày ${date}.`;
+    $('mini-preview-recipient').textContent = text.recipient;
+    const miniText = Array.from(text.greeting);
+    $('mini-preview-line').textContent = miniText.slice(0, 95).join('') + (miniText.length > 95 ? '…' : '');
+    const signatureText=state.design.signatureText.trim()||text.sender;
+    const hasSignature=Boolean(signatureText||state.design.signatureInk)&&state.design.showSignature!=='off';
+    $('signature-visibility-note').hidden=state.design.showSignature!=='off';
+    $('mini-preview-sender').textContent = signatureText;
+    $('mini-preview-sender').closest('.paper-sign').hidden = !hasSignature;
+    ['preview', 'letter'].forEach((prefix) => {
+      $(`${prefix}-recipient`).textContent = text.recipient;
+      $(`${prefix}-greeting`).textContent = text.greeting;
+      $(`${prefix}-message`).textContent = text.message;
+      $(`${prefix}-message`).hidden = !text.message;
+      $(`${prefix}-sender`).textContent = signatureText;
+      $(`${prefix}-sender`).previousElementSibling.textContent = CardGreetings.render(text.template.closing, {self:state.pronoun,you:state.recipientPronoun});
+      $(`${prefix}-sender`).closest('.paper-sign').hidden = !hasSignature;
+    });
+    document.querySelectorAll('.paper-sign').forEach(sign=>{sign.dataset.signatureStyle=state.design.signatureStyle;let ink=sign.querySelector('.signature-ink');if(!ink){ink=document.createElementNS('http://www.w3.org/2000/svg','svg');ink.setAttribute('viewBox','0 0 600 180');ink.setAttribute('class','signature-ink');ink.setAttribute('role','img');ink.setAttribute('aria-label','Chữ ký tay của người gửi');sign.append(ink);}CardSignature.render(ink,state.design.signatureInk);});
+    $('sample-title').textContent = text.template.title;
+    $('sample-counter').textContent = `${state.sampleIndex + 1} / ${samplesFor().length}`;
+    $('envelope-open-button').textContent = GiftScenes.has(state.design.experience) && GiftScenes.phase()==='ready' ? 'Đọc lời chúc đầy đủ' : 'Mở lời chúc dành cho bạn';
+    $('envelope-title').textContent = shared ? `Bạn có một lời chúc ${date}` : 'Một lời thương đang chờ';
+    $('envelope-subtitle').textContent = state.design.scene === 'galaxy'
+      ? 'Giữa triệu vì sao, có một khu vườn dành riêng cho bạn. Chạm để bước vào nhé.'
+      : state.design.scene === 'bouquet' ? 'Có một lời thương được giấu trong bó hoa này. Tự tay mở món quà của bạn nhé.'
+      : shared ? 'Một tấm thiệp nhỏ được gửi đến bạn. Hãy mở để đọc nhé.' : 'Lời chúc đã nằm trong phong bì. Mở ra để xem món quà của bạn.';
+    if (state.design.experience) $('envelope-subtitle').textContent = `${text.envelopeRecipient}. ${CardThemes.catalog[state.design.experience].description || 'Một món quà nhỏ, được chuẩn bị bằng sự chân thành.'}`;
+    if (GiftScenes.has(state.design.experience) && state.design.giftIntro.trim()) $('envelope-subtitle').textContent=state.design.giftIntro;
+    if(arrivalActive()){
+      $('envelope-title').textContent=shared?'Một bó hoa dành riêng cho bạn':'Món quà người nhận sẽ thấy';
+      $('envelope-subtitle').textContent = `Tặng một bó hoa nhân ngày ${date}. Nhận hoa rồi mở món quà và lời chúc phía sau nhé.`;
+    }
+    if(hasArrival()&&!arrivalActive()&&state.design.experience){$('envelope-title').textContent=CardThemes.catalog[state.design.experience].name;}
+    $('envelope-recipient').textContent = text.envelopeRecipient;
+    $('letter-title').textContent = state.design.occasion === 'teachersDay' ? `Chúc mừng ${name}` : `Chúc mừng ngày ${date}`;
+    $('back-to-editor').hidden = shared;
+    $('edit-card').hidden = shared;
+  }
+
+  function syncFields() {
+    Object.entries(fields).forEach(([key, field]) => { state[key] = normalizeText(field.value); });
+    updateMessageCount();
+    renderCard();
+  }
+
+  function validateFields() {
+    syncFields();
+    const limits = { recipientName: CONFIG.maxNameLength, senderName: CONFIG.maxNameLength, pronoun: CONFIG.maxPronounLength, recipientPronoun: CONFIG.maxPronounLength, message: CONFIG.maxMessageLength };
+    const labels = { recipientName: 'Tên người nhận', senderName: 'Tên người gửi', pronoun: 'Cách xưng hô', recipientPronoun: 'Cách gọi người nhận', message: 'Lời nhắn' };
+    for (const [key, limit] of Object.entries(limits)) {
+      if (state[key].length > limit) {
+        showToast(`${labels[key]} không được vượt quá ${limit.toLocaleString('vi-VN')} ký tự.`, true);
+        fields[key].focus();
+        return false;
+      }
+    }
+    const designFields = [['body', 'custom-greeting', CONFIG.maxCustomGreetingLength], ['dedication', 'card-dedication', CONFIG.maxDedicationLength], ['secret', 'secret-message', 1000], ['giftIntro', 'gift-intro', 160], ['welcomeText','welcome-text',160], ['welcomeName','welcome-name',30],['signatureText','signature-text',80]];
+    for (const [key, id, limit] of designFields) {
+      if (state.design[key].length > limit) {
+        showToast(`Nội dung thiết kế vượt ${limit.toLocaleString('vi-VN')} ký tự. Hãy rút ngắn rồi thử lại.`, true);
+        $('design-panel').open = true;
+        $(id).focus();
+        return false;
+      }
+    }
+    if(state.design.welcome==='bebe'&&!welcomeEditor.validate()){showToast('Hãy điền đủ 2–8 câu cho nhân vật, mỗi câu tối đa 160 ký tự.',true);return false;}
+    const flowerNotes=JSON.parse(state.design.flowerNotes || '[]');
+    for(let i=0;i<flowerNotes.length;i++)if(flowerNotes[i].length>160){
+      showToast('Mỗi lời nhắn trên hoa tối đa 160 ký tự. Hãy rút ngắn rồi mở thiệp.',true);
+      $('design-panel').open=true;focusElement($(`flower-note-${i}`),true);return false;
+    }
+    return true;
+  }
+
+  function selectRecipient(target, requestedVariant) {
+    if (!Object.hasOwn(RECIPIENTS,target)) return;
+    if (shared) resetCard();
+    $('toast').hidden=true;
+    const config = RECIPIENTS[target];
+    const variant = config.variants ? requestedVariant ?? variantMemory[target] ?? config.defaultVariant : '';
+    const changed = target !== state.target || variant !== state.variant;
+    state.target=target;
+    state.design.occasion = newOccasionFor(target);
+    state.variant=variant;
+    if (config.variants) variantMemory[target]=state.variant;
+    if (changed) {
+      resetPair(); state.musicId=`${state.design.musicGroup||target}:0`;
+      Object.assign(state.design,themeDesign(target==='women'&&state.variant==='friend'?'garden':CardThemes.defaults[target]));
+    }
+    if(state.design.welcome==='bebe'&&!arrivalEdited)state.design.arrival=recommendedArrival(state.design.experience);
+    $('theme-filter').value='recipient';
+    renderEditor(); showScreen('editor');CardMusic.enterStudio();
+  }
+
+  function changeSample(direction) {
+    const length = samplesFor().length;
+    state.sampleIndex = (state.sampleIndex + direction + length) % length;
+    state.greeting = '';
+    renderCard();
+    if (state.design.body.trim()) showToast('Mẫu gợi ý đã đổi. Bạn đang dùng lời tự viết; chọn “Quay về lời chúc gợi ý” nếu muốn dùng mẫu.');
+  }
+
+  function burstPetals() {
+    window.clearTimeout(petalTimer);
+    const container = $('petal-burst');
+    container.replaceChildren();
+    if (reducedMotion.matches || state.design.effect === 'none' || state.design.intensity === 'off') return;
+    if (state.design.experience) { CardThemes.celebrate(state.design.effect); return; }
+    const count = state.design.intensity === 'gentle' ? 5 : window.matchMedia('(max-width: 640px)').matches
+      ? CONFIG.effects.petalsMobile : CONFIG.effects.petalsDesktop;
+    const fragment = document.createDocumentFragment();
+    for (let i = 0; i < count; i += 1) {
+      const petal = document.createElement('span');
+      petal.className = state.design.effect === 'constellation' ? 'burst-star' : state.design.effect === 'butterflies' ? 'burst-butterfly' : 'burst-petal';
+      petal.setAttribute('aria-hidden', 'true');
+      petal.style.left = `${Math.random() * 100}%`;
+      petal.style.setProperty('--drift', `${Math.round(Math.random() * 160 - 80)}px`);
+      petal.style.setProperty('--rotation', `${Math.round(Math.random() * 360)}deg`);
+      petal.style.animationDelay = `${Math.random() * 0.5}s`;
+      petal.style.animationDuration = `${3.5 + Math.random() * 1.5}s`;
+      fragment.append(petal);
+    }
+    container.append(fragment);
+    petalTimer = window.setTimeout(() => container.replaceChildren(), 6000);
+  }
+
+  function revealLetter() {
+    if (screen !== 'envelope') return;
+    renderCard();
+    showScreen('letter');
+    burstPetals();
+  }
+
+  // Một bộ hẹn giờ duy nhất, có thể bỏ qua và không chạy chồng khi mở lại.
+  function finishBouquet() {
+    if(screen!=='envelope')return;
+    clearTimeout(openingTimer);openingTimer=0;opening=false;
+    arrivalPassed=true;BouquetArrival.hide();
+    bebe?.hide();bebePhase='theme';
+    renderCard();
+    $('envelope-screen').dataset.journeyPhase='theme';
+    CardThemes.setScreen('envelope');
+    // Commit the selected scene's initial frame before starting its own motion.
+    void $('theme-stage').offsetWidth;
+    window.scrollTo({top:0,behavior:'auto'});
+    openEnvelope(false);
+    focusElement($('envelope-title'));
+  }
+
+  function openEnvelope(withMusic=true) {
+    if (screen !== 'envelope' || opening || (hasBebe()&&arrivalActive()&&bebePhase!=='flowers')) return;
+    if(arrivalActive()){
+      CardMusic.openGesture();if(hasBebe())bebe.open();opening=true;
+      if($('bouquet-letter-open'))$('bouquet-letter-open').disabled=true;
+      $('skip-animation').hidden=false;
+      const duration=BouquetArrival.open();
+      if(duration===0)finishBouquet();else openingTimer=setTimeout(finishBouquet,duration);
+      return;
+    }
+    if (GiftScenes.has(state.design.experience)) {
+      if(GiftScenes.phase()==='ready'){revealLetter();return;}
+      if(withMusic)CardMusic.openGesture();opening=true;
+      const duration=CardThemes.open();
+      $('envelope-open-button').disabled=true;$('open-theme-card').disabled=true;
+      $('skip-animation').hidden=false;$('gift-freeze').hidden=true;
+      if(duration===0)finishGift();else openingTimer=setTimeout(finishGift,duration);
+      return;
+    }
+    if(withMusic)CardMusic.openGesture();
+    if (reducedMotion.matches || state.design.intensity === 'off') {
+      revealLetter();
+      return;
+    }
+    opening = true;
+    const stage = state.design.experience ? $('theme-stage') : $(`${state.design.scene}-stage`);
+    const duration = state.design.experience ? CardThemes.open() : state.design.intensity === 'gentle' ? 2000 : CONFIG.effects.openingMs;
+    if ($('open-theme-card')) $('open-theme-card').disabled = true;
+    stage.classList.add('is-opening');
+    stage.setAttribute('aria-busy', 'true');
+    ['open-envelope', 'open-bouquet', 'open-galaxy', 'envelope-open-button'].forEach(id => { $(id).disabled = true; });
+    $('skip-animation').hidden = false;
+    openingTimer = window.setTimeout(revealLetter, duration);
+  }
+
+  function finishGift() {
+    clearTimeout(openingTimer);openingTimer=0;opening=false;GiftScenes.complete();
+    if(hasBebe()){revealLetter();return;}
+    $('envelope-open-button').disabled=false;$('envelope-open-button').textContent=state.design.experience==='umbrella'?'Có lời nhắn dành cho bạn':'Đọc lời chúc đầy đủ';
+    $('skip-animation').hidden=true;$('gift-freeze').hidden=false;
+    focusElement($('envelope-open-button'));
+  }
+  function previewTheme(id) {
+    if(!Object.hasOwn(CardThemes.catalog,id))return;
+    const design={...state.design,...themeDesign(id)};
+    const paper=document.querySelector('.letter-paper').cloneNode(true);
+    paper.querySelectorAll('[id]').forEach(node=>node.removeAttribute('id'));
+    paper.querySelectorAll('button').forEach(node=>{node.disabled=true;});
+    for(const key of ['theme','font','structure','ornament','layout','decoration','experience','scene','intensity','size','reveal'])paper.dataset[key]=design[key];
+    paper.querySelectorAll('.tx-paper-mark').forEach(mark=>mark.remove());
+    const mark=document.createElement('span');mark.className='tx-paper-mark gift-scene gift-motion-off';mark.dataset.phase='ready';mark.setAttribute('aria-hidden','true');mark.innerHTML=CardThemes.renderArt(id,'reading');paper.querySelector('.paper-heading').prepend(mark);
+    CardMusic.stopOnPageHide();CardMusic.leaveStudio();
+    GiftScenes.openPreview(id,{design,meta:CardThemes.catalog[id],intro:design.giftIntro.trim() || `${cardText().envelopeRecipient}. ${CardThemes.catalog[id].description}`,readingNode:paper,onSelect:applyTheme});
+    renderOccasion($('gift-preview-dialog'));
+  }
+  function stringProperty(data, key, fallback, limit) {
+    if (!Object.hasOwn(data, key)) return fallback;
+    if (typeof data[key] !== 'string' || data[key].length > limit) throw new Error('Invalid text');
+    return normalizeText(data[key]);
+  }
+
+  // Liên kết chỉ chứa dữ liệu văn bản; giới hạn kích thước trước khi giải mã.
+  function parseCardFragment(hash) {
+    if (hash.length > CONFIG.maxFragmentLength) throw new Error('Invalid fragment');
+    const data = CardLinks.decode(hash);
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Invalid card');
+    if (![1,2,4].includes(data.v)) throw new Error('Unsupported version');
+    const target = Object.hasOwn(data, 'target') ? data.target : 'mom';
+    if (typeof target !== 'string' || !Object.hasOwn(RECIPIENTS, target)) throw new Error('Invalid target');
+    const config = RECIPIENTS[target];
+    const variant = Object.hasOwn(data, 'variant') ? data.variant : config.defaultVariant || '';
+    if (typeof variant !== 'string') throw new Error('Invalid variant');
+    if (config.variants ? !Object.hasOwn(config.variants, variant) : variant !== '') throw new Error('Invalid variant');
+    const result = { target, variant };
+    const recipient = recipientFor(result);
+    result.recipientName = stringProperty(data, 'recipientName', '', CONFIG.maxNameLength);
+    result.senderName = stringProperty(data, 'senderName', CONFIG.defaultSender, CONFIG.maxNameLength);
+    result.pronoun = stringProperty(data, 'pronoun', recipient.pronoun, CONFIG.maxPronounLength);
+    result.message = stringProperty(data, 'message', '', CONFIG.maxMessageLength);
+    result.recipientPronoun = stringProperty(data,'recipientPronoun',recipient.you,CONFIG.maxPronounLength);
+    result.tone = stringProperty(data,'tone','all',20);
+    if (!Object.hasOwn(TONES,result.tone)) throw new Error('Invalid tone');
+    result.greeting = stringProperty(data,'greeting','',CONFIG.maxCustomGreetingLength);
+    result.volume = Object.hasOwn(data,'volume')?data.volume:30;
+    if (typeof result.volume!=='number'||!Number.isFinite(result.volume)||result.volume<0||result.volume>100) throw new Error('Invalid volume');
+    result.sampleIndex = Object.hasOwn(data, 'sampleIndex') ? data.sampleIndex : 0;
+    if (!Number.isInteger(result.sampleIndex) || result.sampleIndex < 0 || result.sampleIndex >= (data.v === 4 ? 1001 : LEGACY_GREETINGS[recipient.greetings]?.length || 0)) {
+      throw new Error('Invalid template');
+    }
+    result.musicId = `${target}:0`;
+    result.design = defaultDesign(data.v !== 4);
+    result.design.arrival='classic';result.design.welcome='none';result.design.welcomeMusic='off';result.design.signatureStyle='classic';
+    if (data.v === 2 || data.v === 4) {
+      if (Object.hasOwn(data, 'musicId')) {
+        if (typeof data.musicId !== 'string' || !/^(mom|grandma|teacher|sister|friend|women|lover):(?:[0-9]|1[0-9])$/.test(data.musicId)) throw new Error('Invalid song');
+        result.musicId = data.musicId;
+      }
+      if (Object.hasOwn(data, 'design')) {
+        const design = data.design;
+        if (!design || typeof design !== 'object' || Array.isArray(design)) throw new Error('Invalid design');
+        for (const [key, choices] of Object.entries(DESIGN_OPTIONS)) {
+          if (Object.hasOwn(design, key)) {
+            if (typeof design[key] !== 'string' || !choices.includes(design[key])) throw new Error('Invalid design choice');
+            result.design[key] = design[key];
+          }
+        }
+        result.design.dedication = stringProperty(design, 'dedication', '', CONFIG.maxDedicationLength);
+        result.design.body = stringProperty(design, 'body', '', CONFIG.maxCustomGreetingLength);
+        result.design.secret = stringProperty(design,'secret','',1000);
+        result.design.giftIntro=stringProperty(design,'giftIntro','',160);
+        result.design.musicGroup=stringProperty(design,'musicGroup','',12);
+        if(result.design.musicGroup&&!Object.hasOwn(RECIPIENTS,result.design.musicGroup))throw new Error('Invalid music group');
+        result.design.welcomeText=stringProperty(design,'welcomeText','',160);
+        result.design.welcomeLines=stringProperty(design,'welcomeLines','',8000);WelcomeStudio.scriptFor(result.design.welcomeLines);
+        result.design.welcomeName=stringProperty(design,'welcomeName','bé B',30);
+        result.design.signatureText=stringProperty(design,'signatureText','',80);result.design.signatureInk=stringProperty(design,'signatureInk','',1215);CardSignature.decode(result.design.signatureInk);
+        result.design.flowerNotes=stringProperty(design,'flowerNotes','[]',5000);
+        const notes=JSON.parse(result.design.flowerNotes);
+        if(!Array.isArray(notes)||notes.length>5||notes.some(note=>typeof note!=='string'||note.length>160))throw new Error('Invalid flower notes');
+      }
+    }
+    if(!result.musicId.startsWith(`${result.design.musicGroup||target}:`))throw new Error('Song group mismatch');
+    if (data.v !== 4) {
+      const legacyTemplate=LEGACY_GREETINGS[recipient.greetings]?.[result.sampleIndex];
+      if (legacyTemplate) result.greeting=CardGreetings.render(legacyTemplate,{self:result.pronoun,you:recipient.you});
+      if (result.target==='women' && result.musicId==='women:0') result.musicId='women:1';
+    } else {
+      if (!result.greeting.trim()) throw new Error('Missing greeting snapshot');
+      const preset=CardThemes.catalog[result.design.experience];
+      if (preset && !preset.compatibleOpenings.includes(result.design.scene)) throw new Error('Incompatible opening');
+    }
+    return result;
+  }
+
+  function loadFragment() {
+    const hash = window.location.hash;
+    if (!hash || ['#main-content', '#recipients', '#how-it-works'].includes(hash)) return false;
+    try {
+      state = parseCardFragment(hash);arrivalEdited=true;
+      shared = true;
+      pronounEdited = true;
+      if (RECIPIENTS[state.target].variants) variantMemory[state.target] = state.variant;
+      renderEditor();
+      renderCard();
+      showScreen('envelope');
+      return true;
+    } catch (_) {
+      resetCard();
+      showScreen('home', false);
+      showToast('Liên kết thiệp không hợp lệ hoặc quá dài. Bạn vẫn có thể tạo một tấm thiệp mới ở đây.', true);
+      return false;
+    }
+  }
+
+  function prepareShareLink() {
+    const payload = {
+      v: 4, target: state.target, variant: state.variant,
+      recipientName: state.recipientName, senderName: state.senderName,
+      pronoun: state.pronoun, sampleIndex: state.sampleIndex, message: state.message,
+      recipientPronoun:state.recipientPronoun,tone:state.tone,greeting:cardText().greeting,volume:CardMusic.currentVolume(),
+      musicId: state.musicId, design: Object.fromEntries(Object.entries(state.design).filter(([key,value])=>
+        !(key==='musicGroup' && value==='') && !(key==='occasion' && value==='womensDay')))
+    };
+    let fragment;
+    try { fragment = CardLinks.encodeCompact(payload); }
+    catch (_) { showToast('Chưa thể tạo liên kết. Hãy kiểm tra độ dài lời nhắn và thử lại.', true); return null; }
+    const originalLength = `#card=${encodeURIComponent(JSON.stringify(payload))}`.length;
+    const savedPercent = Math.max(0, Math.round((1 - fragment.length / originalLength) * 100));
+    $('link-size-status').textContent = `Liên kết tự gọn: ${fragment.length.toLocaleString('vi-VN')} ký tự · ngắn hơn ${savedPercent}%. Giữ nguyên lời chúc, thiết kế và nhạc.`;
+    if (fragment.length > CONFIG.maxFragmentLength) {
+      showToast('Liên kết quá dài. Hãy rút ngắn lời nhắn trước khi chia sẻ.', true);
+      return null;
+    }
+    $('share-long-warning').hidden = fragment.length <= 12000;
+    $('share-long-warning').textContent = 'Liên kết này khá dài. Một số ứng dụng có thể cắt liên kết; hãy kiểm tra lại sau khi gửi hoặc rút ngắn lời nhắn.';
+    const url = new URL(window.location.href);
+    url.hash = fragment;
+    const link = url.href;
+    $('share-link-field').value = link;
+    if (window.location.protocol === 'file:') {
+      showToast('Để người khác mở được thiệp, hãy đưa website lên hosting rồi chia sẻ liên kết từ địa chỉ đó.', true);
+      return null;
+    }
+    return link;
+  }
+
+  function showManualCopy() {
+    $('manual-copy-panel').hidden = false;
+    const input = $('share-link-field');
+    focusElement(input, true);
+    window.requestAnimationFrame(() => {
+      input.select();
+      input.setSelectionRange(0, input.value.length);
+    });
+    showToast('Không thể sao chép tự động. Hãy chọn và sao chép liên kết trong ô bên dưới.', true);
+  }
+
+  async function copyPreparedLink(link) {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      try {
+        await navigator.clipboard.writeText(link);
+        $('manual-copy-panel').hidden = true;
+        showToast('Đã sao chép liên kết. Bạn có thể gửi tấm thiệp ngay rồi.');
+        return true;
+      } catch (_) { /* Thử cách sao chép dự phòng trước khi hiện ô sao chép thủ công. */ }
+    }
+    const panel = $('manual-copy-panel');
+    const input = $('share-link-field');
+    const active = document.activeElement;
+    panel.hidden = false;
+    input.focus({ preventScroll: true });
+    input.select();
+    input.setSelectionRange(0, input.value.length);
+    let copied = false;
+    try {
+      copied = typeof document.execCommand === 'function' && document.execCommand('copy') === true;
+    } catch (_) { copied = false; }
+    if (copied) {
+      panel.hidden = true;
+      if (active && active.isConnected && typeof active.focus === 'function') active.focus({ preventScroll: true });
+      showToast('Đã sao chép liên kết. Bạn có thể gửi tấm thiệp ngay rồi.');
+      return true;
+    }
+    showManualCopy();
+    return false;
+  }
+
+  async function shareCard() {
+    const link = prepareShareLink();
+    if (!link) return;
+    if (typeof navigator.share === 'function') {
+      try {
+        const {date, name} = occasionFor(state);
+        await navigator.share({ title: `Thiệp ${date} · ${name}`, text: `Một lời chúc ${date} dành riêng cho bạn.`, url: link });
+        showToast('Tấm thiệp đã sẵn sàng gửi đi.');
+        return;
+      } catch (error) {
+        if (error && error.name === 'AbortError') return;
+      }
+    }
+    await copyPreparedLink(link);
+  }
+
+  // Trình phát dùng một audio duy nhất, tự dò tệp theo nhóm và giữ lựa chọn khi chia sẻ.
+  document.addEventListener('cardmusicchange', event => {
+    const id = event.detail && event.detail.id;
+    if (typeof id === 'string' && id.startsWith(`${state.design.musicGroup||state.target}:`)) state.musicId = id;
+  });
+  document.addEventListener('cardmusicnotice', event => {
+    if (event.detail && typeof event.detail.message === 'string') showToast(event.detail.message, true);
+  });
+
+  ['theme', 'font', 'layout', 'structure'].forEach(key => {
+    document.querySelectorAll(`[data-${key}-choice]`).forEach(button => {
+      button.addEventListener('click', () => {
+        state.design[key] = button.getAttribute(`data-${key}-choice`);
+        renderCard();
+      });
+    });
+  });
+  ['decoration', 'effect', 'scene', 'ornament', 'intensity', 'size', 'reveal'].forEach(key => {
+    $(`${key}-field`).addEventListener('change', event => {
+      state.design[key] = event.target.value;
+      renderCard();
+    });
+  });
+  $('recipient-music-group').addEventListener('change',()=>{state.design.musicGroup=$('recipient-music-group').value;state.musicId=`${state.design.musicGroup||state.target}:0`;CardMusic.setGroup(state.design.musicGroup||state.target,state.musicId);renderCard();});
+  $('theme-gallery').addEventListener('click',event => {
+    const button=event.target.closest('[data-theme-preset]');if(button)applyTheme(button.dataset.themePreset);
+    const preview=event.target.closest('[data-preview-theme]');if(preview)previewTheme(preview.dataset.previewTheme);
+  });
+  let recommendationKey='';
+  function renderThemeRecommendations(){
+    const filter=$('theme-filter').value,key=`${state.target}:${state.variant}:${filter}`;
+    if(recommendationKey===key)return;recommendationKey=key;
+    const target=filter.startsWith('for-')?filter.slice(4):state.target;
+    const group=CardRecommendations.groupFor(target),label=CardRecommendations.labels[group],recommended=CardRecommendations.idsFor(group);
+    $('theme-filter').querySelector('[value=recipient]').textContent=`Gợi ý cho ${CardRecommendations.labels[CardRecommendations.groupFor(state.target)]}`;
+    const entries=[...document.querySelectorAll('.theme-entry')],order=Object.keys(CardThemes.catalog);let visible=0;
+    entries.sort((a,b)=>{
+      const x=recommended.indexOf(a.dataset.entryId),y=recommended.indexOf(b.dataset.entryId);
+      const rank=id=>{const t=CardThemes.catalog[id];return t.fresh?100:200;};
+      return (x<0?rank(a.dataset.entryId):x)-(y<0?rank(b.dataset.entryId):y)||order.indexOf(a.dataset.entryId)-order.indexOf(b.dataset.entryId);
+    });
+    const fragment=document.createDocumentFragment();
+    for(const entry of entries){
+      const id=entry.dataset.entryId,match=recommended.includes(id),moods=CardThemes.catalog[id].moods||MOODS[id]||[];
+      entry.hidden=filter==='recipient'||filter.startsWith('for-')?!match:filter!=='all'&&!moods.includes(filter);
+      entry.dataset.recommended=String(match);
+      let badge=entry.querySelector('.theme-fit');
+      if(match){if(!badge){badge=document.createElement('small');badge.className='theme-fit';entry.querySelector('.theme-tile-name').append(badge);}badge.textContent=`Cho ${label}`;}
+      else badge?.remove();
+      if(!entry.hidden)visible++;fragment.append(entry);
+    }
+    $('theme-gallery').append(fragment);
+    $('theme-recommendation-status').textContent=`${visible} mẫu đang hiện · ${filter==='all'?'Mẫu hợp với '+label+' được gợi ý ở đầu.':filter==='recipient'||filter.startsWith('for-')?'Gợi ý dành cho '+label+'.':'Bạn đang lọc theo cảm xúc.'} Chọn “Tất cả không gian” để xem đủ ${order.length} mẫu.`;
+  }
+  function guidedState(draft){
+    const target=Object.hasOwn(RECIPIENTS,draft.target)?draft.target:state.target;
+    const next=makeDefaultState(),config=RECIPIENTS[target];
+    const theme=Object.hasOwn(CardThemes.catalog,draft.theme)?draft.theme:CardRecommendations.idsFor(target)[0];
+    next.target=target;next.variant=config.variants?(Object.hasOwn(config.variants,draft.variant)?draft.variant:config.defaultVariant):'';
+    const pair=CardGreetings.defaultPair(pairKey(next));
+    Object.assign(next,{recipientName:draft.recipientName||'',senderName:draft.senderName||'',pronoun:pair.self,recipientPronoun:pair.you,message:draft.message||'',volume:state.volume,tone:Object.hasOwn(TONES,draft.tone)?draft.tone:'all',musicId:`${draft.musicGroup||target}:${draft.track||0}`});
+    Object.assign(next.design,themeDesign(theme),{body:draft.body||'',arrival:draft.arrival||'growing',musicGroup:draft.musicGroup||'',signatureText:draft.signatureText||'',occasion:newOccasionFor(target)});
+    const notes=CardThemes.catalog[theme].defaultNotes;if(notes)next.design.flowerNotes=JSON.stringify(notes);
+    return next;
+  }
+  function handleStudioHelp(action,target){
+    if(action==='preview-draft'){
+      const next=guidedState(target),text=cardText(next);
+      return {...text,pronoun:next.pronoun,recipientPronoun:next.recipientPronoun,signature:next.design.signatureText||text.sender,target:next.target,variant:next.variant,theme:next.design.experience,palette:next.design.theme,musicGroup:next.design.musicGroup||next.target,track:Number(next.musicId.split(':')[1]),arrival:next.design.arrival};
+    }
+    if(action==='edit-card'){
+      const {kind,value,track}=target||{};
+      const designKeys={effect:'effect',intensity:'intensity',arrival:'arrival'};
+      if(kind==='theme'&&!Object.hasOwn(CardThemes.catalog,value))return false;
+      if(kind==='music'&&(!Object.hasOwn(RECIPIENTS,value)||!Number.isInteger(track)||track<0||track>5))return false;
+      if(designKeys[kind]&&!DESIGN_OPTIONS[designKeys[kind]].includes(value))return false;
+      const limits={senderName:100,recipientName:100,welcomeName:30,signatureText:80};
+      if(Object.hasOwn(limits,kind)&&(typeof value!=='string'||value.length>limits[kind]))return false;
+      if(!['theme','music',...Object.keys(designKeys),...Object.keys(limits)].includes(kind))return false;
+      if(screen!=='editor')selectRecipient(state.target);
+      helperUndo={state:structuredClone(state),arrivalEdited,pronounEdited,variants:{...variantMemory}};
+      if(kind==='theme')applyTheme(value);
+      else if(kind==='music'){state.design.musicGroup=value===state.target?'':value;state.musicId=`${value}:${track}`;renderEditor();}
+      else if(kind==='arrival')setArrival(value);
+      else if(designKeys[kind]){state.design[kind]=value;renderDesignControls();renderCard();}
+      else{if(kind==='senderName'||kind==='recipientName'){state[kind]=value;fields[kind].value=value;}else state.design[kind]=value;renderDesignControls();renderCard();}
+      return true;
+    }
+
+    if(action==='apply-draft'){
+      const draft=target;
+      if(!draft||!Object.hasOwn(RECIPIENTS,draft.target)||!Object.hasOwn(CardThemes.catalog,draft.theme))return false;
+      const bounded=(key,max)=>typeof draft[key]==='string'&&draft[key].length<=max;
+      if(!['recipientName','senderName'].every(key=>bounded(key,100))||!bounded('body',1000)||!bounded('message',1000)||!bounded('signatureText',80)||!['stardust','growing'].includes(draft.arrival)||!Number.isInteger(draft.track)||draft.track<0||draft.track>5||(draft.musicGroup&&!Object.hasOwn(RECIPIENTS,draft.musicGroup)))return false;
+      helperUndo={state:structuredClone(state),arrivalEdited,pronounEdited,variants:{...variantMemory}};
+      const next=guidedState(draft),config=RECIPIENTS[draft.target];
+      state=next;shared=false;arrivalEdited=true;pronounEdited=false;removeFragment();
+      if(config.variants)variantMemory[draft.target]=next.variant;
+      $('theme-filter').value='recipient';renderEditor();showScreen('editor');CardMusic.enterStudio();return true;
+    }
+    if(action==='undo-draft'){
+      if(!helperUndo)return false;
+      state=helperUndo.state;arrivalEdited=helperUndo.arrivalEdited;pronounEdited=helperUndo.pronounEdited;Object.assign(variantMemory,helperUndo.variants);helperUndo=null;shared=false;removeFragment();renderEditor();showScreen('editor');CardMusic.enterStudio();return true;
+    }
+    if(action==='preview'){if(!validateFields())return false;shared=false;renderCard();showScreen('envelope');return true;}
+    if(action==='focus'){
+      if(target==='share'){showToast('Mở thiệp bằng “Mở thiệp yêu thương”, rồi chọn Chia sẻ hoặc Sao chép liên kết.');return;}
+      if(['help','privacy','deploy','mobile'].includes(target))return;
+      if(screen!=='editor')selectRecipient(state.target);
+      const ids={journey:'arrival-style',arrival:'arrival-style',music:'recipient-music-group',studio:'studio-music-toggle',welcome:'welcome-script-mode',signature:'signature-text',recipient:'back-to-recipients',names:'recipient-name',words:'personal-message',secret:'secret-message',design:'effect-field',effects:'effect-field',preview:'preview-welcome',themes:'theme-filter'};
+      if(ids[target])focusElement($(ids[target]),true);return;
+    }
+    if(screen!=='editor')selectRecipient(target||state.target);
+    if(action==='themes'){$('theme-filter').value=target?`for-${target}`:'recipient';renderThemeRecommendations();focusElement($('theme-filter'),true);}
+    else if(action==='music')focusElement($('studio-music-toggle'),true);
+    else if(action==='welcome')focusElement($('welcome-script-mode'),true);
+    else if(action==='signature')focusElement($('signature-text'),true);
+    else if(action==='words')focusElement(fields.message,true);
+    else if(action==='recipient')focusElement($('back-to-recipients'),true);
+  }
+  const MOODS={galaxy:['fantasy','bright'],aurora:['fantasy','gentle'],garden:['gentle'],rose:['romantic'],sunflower:['bright'],lotus:['elegant','gentle'],moonlake:['gentle','fantasy'],butterfly:['bright','fantasy'],letter:['elegant'],pearl:['elegant'],crystal:['romantic'],lovegalaxy:['romantic','fantasy']};
+  $('start-quick-card').addEventListener('click',()=>{if(studioHelper.createQuick)studioHelper.createQuick();else focusElement(fields.senderName,true);});
+  $('theme-filter').addEventListener('change',renderThemeRecommendations);
+  $('gift-intro').addEventListener('input',event=>{state.design.giftIntro=normalizeText(event.target.value);renderCard();});
+  document.querySelectorAll('[data-flower-note]').forEach(field=>field.addEventListener('input',()=>{
+    const notes=[...document.querySelectorAll('[data-flower-note]')].map(node=>normalizeText(node.value));
+    state.design.flowerNotes=JSON.stringify(notes);renderCard();
+  }));
+  $('theme-defaults').addEventListener('click',()=>applyTheme(state.design.experience || CardThemes.defaults[state.target]));
+  $('curate-design').addEventListener('click',()=>{const choices=CardRecommendations.idsFor(state.target);applyTheme(choices[(choices.indexOf(state.design.experience)+1)%choices.length]);});
+  $('pair-field').addEventListener('change',event=>{
+    const pair=CardGreetings.getPairs(pairKey()).find(pair=>pair.id===event.target.value);
+    if(pair){state.pronoun=pair.self;state.recipientPronoun=pair.you;state.greeting='';fields.pronoun.value=pair.self;fields.recipientPronoun.value=pair.you;renderPairs();renderCard();}
+    else focusElement(fields.pronoun,true);
+  });
+  $('lover-call').addEventListener('change',event=>{
+    const pair=CardGreetings.defaultPair('lover');
+    const value=event.target.value==='name'?state.recipientName.trim():event.target.value;
+    if(event.target.value==='name'&&!value){showToast('Điền tên người nhận trước khi dùng tên để xưng hô.');return;}
+    if(value)state.recipientPronoun=value;
+    else state.recipientPronoun=state.pronoun==='em'?'anh':state.pronoun==='mình'?'cậu':pair.you;
+    fields.recipientPronoun.value=state.recipientPronoun;state.greeting='';renderPairs();renderCard();
+  });
+  $('tone-field').addEventListener('change',event=>{state.tone=event.target.value;state.sampleIndex=0;state.greeting='';renderCard();});
+  $('keep-custom-content').addEventListener('click',()=>{$('content-change-notice').hidden=true;});
+  $('replace-custom-content').addEventListener('click',()=>{state.design.body='';state.greeting='';$('content-change-notice').hidden=true;renderDesignControls();renderCard();});
+  $('secret-message').addEventListener('input',event=>{state.design.secret=normalizeText(event.target.value);renderCard();});
+  for(const [id,key] of [['show-date','showDate'],['show-signature','showSignature']]) $(id).addEventListener('change',event=>{state.design[key]=event.target.checked?'on':'off';renderCard();});
+  $('secret-reveal-button').addEventListener('click',()=>{const hidden=!$('secret-content').hidden;$('secret-content').hidden=hidden;$('secret-reveal-button').setAttribute('aria-expanded',String(!hidden));});
+  document.addEventListener('cardmusicvolume',event=>{state.volume=event.detail.volume;});
+  $('theme-stage').addEventListener('click',event=>{if(event.target.closest('#open-theme-card'))openEnvelope();});
+  $('arrival-style').addEventListener('change',event=>{setArrival(event.target.value);});
+  $('welcome-mode').addEventListener('change',event=>{state.design.welcome=event.target.value;arrivalEdited=false;state.design.arrival=event.target.value==='bebe'?recommendedArrival(state.design.experience):'classic';renderDesignControls();renderCard();});
+  $('signature-text').addEventListener('input',event=>{state.design.signatureText=normalizeText(event.target.value);renderCard();});
+  $('signature-style').addEventListener('change',event=>{state.design.signatureStyle=event.target.value;renderCard();});
+  $('welcome-name').addEventListener('input',event=>{state.design.welcomeName=normalizeText(event.target.value);renderCard();});
+  $('welcome-music').addEventListener('change',event=>{state.design.welcomeMusic=event.target.checked?'on':'off';renderCard();});
+  document.addEventListener('cardmusicwelcome',event=>bebe?.setSound(event.detail));
+  $('welcome-text').addEventListener('input',event=>{state.design.welcomeText=normalizeText(event.target.value);renderCard();});
+  $('preview-welcome').addEventListener('click',()=>{if(!validateFields())return;shared=false;renderCard();showScreen('envelope');});
+  document.querySelectorAll('[data-arrival-choice]').forEach(button=>button.addEventListener('click',()=>{setArrival(button.dataset.arrivalChoice);}));
+  document.querySelectorAll('[data-preview-arrival]').forEach(button=>button.addEventListener('click',()=>{if(!validateFields())return;setArrival(button.dataset.previewArrival);shared=false;renderCard();showScreen('envelope');}));
+  $('preview-arrival').addEventListener('click',()=>{if(!validateFields())return;shared=false;renderCard();showScreen('envelope');});
+  $('preview-effect').addEventListener('click',()=>renderEffectGuide(true));
+  $('jump-to-preview').addEventListener('click', () => focusElement($('preview-card'), true));
+  [['card-dedication', 'dedication'], ['custom-greeting', 'body']].forEach(([id, key]) => {
+    $(id).addEventListener('input', event => {
+      state.design[key] = normalizeText(event.target.value);
+      updateDesignCount();
+      renderCard();
+    });
+  });
+  $('use-template').addEventListener('click', () => {
+    state.design.body = '';
+    renderDesignControls();
+    renderCard();
+  });
+  $('reset-design').addEventListener('click', () => {
+    state.design = { ...defaultDesign(), ...themeDesign(state.design.experience || CardThemes.defaults[state.target]), body: state.design.body, dedication:state.design.dedication,secret:state.design.secret,giftIntro:state.design.giftIntro,flowerNotes:state.design.flowerNotes,arrival:state.design.arrival,welcome:state.design.welcome,welcomeText:state.design.welcomeText,welcomeLines:state.design.welcomeLines,welcomeName:state.design.welcomeName,welcomeMusic:state.design.welcomeMusic,signatureText:state.design.signatureText,signatureInk:state.design.signatureInk,signatureStyle:state.design.signatureStyle,musicGroup:state.design.musicGroup };
+    renderDesignControls();
+    renderCard();
+  });
+  $('custom-greeting').addEventListener('paste', event => {
+    const pasted = event.clipboardData && event.clipboardData.getData('text/plain');
+    const field = event.currentTarget;
+    if (pasted && field.value.length - (field.selectionEnd - field.selectionStart) + pasted.length > CONFIG.maxCustomGreetingLength) {
+      event.preventDefault();
+      showToast('Lời chúc riêng vượt 3.000 ký tự. Hãy rút ngắn rồi dán lại; nội dung hiện tại được giữ nguyên.', true);
+    }
+  });
+
+  document.querySelector('.skip-link').addEventListener('click', (event) => {
+    event.preventDefault();
+    const main = $('main-content');
+    main.tabIndex = -1;
+    main.focus({ preventScroll: true });
+    main.scrollIntoView({ behavior: 'auto', block: 'start' });
+  });
+  $('brand-home').addEventListener('click', () => goHome());
+  $('nav-create').addEventListener('click', () => goHome('recipients'));
+  $('nav-about').addEventListener('click', () => goHome('how-it-works'));
+  $('start-button').addEventListener('click', () => goHome('recipients'));
+  document.querySelector('[data-start-create]').addEventListener('click', () => goHome('recipients'));
+  $('back-to-recipients').addEventListener('click', () => goHome('recipients'));
+  recipientButtons.forEach((button) => button.addEventListener('click', () => selectRecipient(button.dataset.recipient,button.dataset.variant)));
+  Object.entries(fields).forEach(([key, field]) => {
+    field.maxLength = key === 'message' ? CONFIG.maxMessageLength : ['pronoun','recipientPronoun'].includes(key) ? CONFIG.maxPronounLength : CONFIG.maxNameLength;
+    field.addEventListener('input', () => {
+      if (['pronoun','recipientPronoun'].includes(key)) state.greeting='';
+      syncFields();
+      if (['pronoun','recipientPronoun'].includes(key)) renderPairs();
+    });
+  });
+  fields.message.addEventListener('paste', (event) => {
+    const pasted = event.clipboardData && event.clipboardData.getData('text/plain');
+    if (!pasted) return;
+    const resultingLength = fields.message.value.length - (fields.message.selectionEnd - fields.message.selectionStart) + pasted.length;
+    if (resultingLength > CONFIG.maxMessageLength) {
+      event.preventDefault();
+      showToast('Lời nhắn vượt 1.000 ký tự. Hãy rút ngắn nội dung rồi dán lại; lời nhắn hiện tại được giữ nguyên.', true);
+    }
+  });
+  $('variant-field').addEventListener('change', (event) => {
+    const config = RECIPIENTS[state.target];
+    if (!config.variants || !Object.hasOwn(config.variants, event.target.value)) return;
+    state.variant = event.target.value;
+    variantMemory[state.target] = state.variant;
+    resetPair();
+    $('editor-title').textContent = `Một lời chúc dành cho ${recipientFor().you}`;
+    $('selected-recipient-label').textContent = recipientFor().label;
+    $('recipient-music-group').querySelector('[value=""]').textContent = `Theo người nhận (${recipientFor().label})`;
+    updateSelectedRecipients();
+    renderCard();
+    studioHelper.contextChanged?.();
+  });
+  $('prev-greeting').addEventListener('click', () => changeSample(-1));
+  $('next-greeting').addEventListener('click', () => changeSample(1));
+  $('preview-button').addEventListener('click', () => {
+    syncFields();
+    focusElement($('preview-card'), true);
+  });
+  $('personalize-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (!validateFields()) return;
+    shared = false;
+    $('manual-copy-panel').hidden = true;
+    renderCard();
+    showScreen('envelope');
+  });
+  ['open-envelope', 'open-bouquet', 'open-galaxy'].forEach(id => $(id).addEventListener('click', openEnvelope));
+  $('envelope-open-button').addEventListener('click', openEnvelope);
+  $('skip-animation').addEventListener('click',()=>!arrivalActive()&&GiftScenes.has(state.design.experience)?finishGift():revealLetter());
+  $('back-to-editor').addEventListener('click', () => {
+    if (shared) return;
+    renderEditor();
+    showScreen('editor');CardMusic.enterStudio();
+  });
+  $('edit-card').addEventListener('click', () => {
+    if (shared) return;
+    renderEditor();
+    showScreen('editor');CardMusic.enterStudio();
+  });
+  $('replay-card').addEventListener('click', () => {
+    renderCard();
+    $('manual-copy-panel').hidden = true;
+    showScreen('envelope');
+  });
+  $('create-another').addEventListener('click', () => {
+    resetCard();
+    goHome('recipients');
+  });
+  $('share-card').addEventListener('click', shareCard);
+  $('copy-link').addEventListener('click', async () => {
+    const link = prepareShareLink();
+    if (link) await copyPreparedLink(link);
+  });
+  $('close-copy-panel').addEventListener('click', () => {
+    $('manual-copy-panel').hidden = true;
+    focusElement($('copy-link'));
+  });
+  window.addEventListener('hashchange', () => {
+    if (window.location.hash && !['#main-content', '#recipients', '#how-it-works'].includes(window.location.hash)) loadFragment();
+    else if (shared) { resetCard(); showScreen('home', false); }
+  });
+  const onMotionChange = () => {
+    if (reducedMotion.matches) {
+      $('petal-burst').replaceChildren();
+      window.clearTimeout(petalTimer);
+      if (opening) {if(arrivalActive())finishBouquet();else if(GiftScenes.has(state.design.experience))finishGift();else revealLetter();}
+    }
+  };
+  if (typeof reducedMotion.addEventListener === 'function') reducedMotion.addEventListener('change', onMotionChange);
+  else if (typeof reducedMotion.addListener === 'function') reducedMotion.addListener(onMotionChange);
+  window.addEventListener('pagehide', () => {
+    CardMusic.stopOnPageHide();BouquetArrival.hide();bebe?.hide();
+    window.clearTimeout(openingTimer);
+    window.clearTimeout(petalTimer);
+  });
+
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) { cancelOpening(); CardMusic.resumeUI(); if(screen==='envelope')showScreen('envelope',false); }
+  });
+
+  document.addEventListener('visibilitychange',()=>{document.documentElement.classList.toggle('page-hidden',document.hidden);if(document.hidden&&opening&&!arrivalActive()&&GiftScenes.has(state.design.experience))finishGift();});
+  document.title = CONFIG.siteName;
+  $('manual-copy-panel').hidden = true;
+  $('skip-animation').hidden = true;
+  if (!loadFragment()) showScreen('home', false);
+})();
+
+

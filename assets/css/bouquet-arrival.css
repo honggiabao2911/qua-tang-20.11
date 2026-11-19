@@ -1,0 +1,66 @@
+/* The arrival is a gift of flowers. The letter appears in the next scene. */
+#bouquet-arrival{width:min(100%,1040px);margin:0 auto;isolation:isolate;min-width:0}
+.bouquet-arrival{--ba-open-duration:1250ms;position:relative;isolation:isolate;overflow:hidden;border-radius:30px;padding:32px 18px 26px;background:radial-gradient(ellipse at 50% 36%,#30263b,#171526 48%,#100f1d);color:#fbecdd;box-shadow:inset 0 0 0 1px #f7d7b21c,0 25px 80px #30223c26}
+.bouquet-arrival[hidden]{display:none!important}
+.ba-aura{position:absolute;inset:0;z-index:-1;background:radial-gradient(ellipse at 45% 31%,#ecbad21a,transparent 45%);pointer-events:none}
+.ba-constellation{position:absolute;inset:0;pointer-events:none;opacity:.6;background-image:radial-gradient(circle at 13% 21%,#ffefd1 0 1px,transparent 1.8px),radial-gradient(circle at 85% 14%,#ffefd1 0 1px,transparent 2px),radial-gradient(circle at 93% 49%,#d8e5e9 0 1px,transparent 1.8px),radial-gradient(circle at 9% 72%,#ffefd1 0 1px,transparent 1.8px),radial-gradient(circle at 21% 83%,#eecbdb 0 1px,transparent 1.8px)}
+.ba-greeting{position:relative;z-index:4;text-align:center}
+.ba-occasion{font:600 10px/1.7 var(--sans,Arial,sans-serif);letter-spacing:2px;color:#e5c5ae}
+.ba-gift-recipient{font:400 clamp(25px,3.5vw,39px)/1.5 var(--serif,Georgia,serif);margin:10px 0 0;overflow-wrap:anywhere;color:inherit}
+.ba-sender{font:11px/1.7 var(--sans,Arial,sans-serif);color:#c9b5c3;margin:8px auto 0;max-width:85%;overflow-wrap:anywhere}
+.ba-scene{position:relative;width:100%;max-width:850px;aspect-ratio:1000/1100;margin:-1% auto -1%;transform-origin:50% 88%;isolation:isolate}
+.ba-bouquet-svg,.ba-light-particles{position:absolute;inset:0;display:block;width:100%;height:100%;pointer-events:none}
+.ba-bouquet-svg{z-index:1;overflow:visible}.ba-light-particles{z-index:3;mix-blend-mode:screen}
+.ba-scene-glow{position:absolute;inset:8% 7% 20%;z-index:0;pointer-events:none;border-radius:50%;background:radial-gradient(ellipse,#dab4cf0b,transparent 70%)}
+.bouquet-arrival[data-style=stardust] .ba-bloom{opacity:.84}
+.bouquet-arrival[data-style=stardust] .ba-stems{opacity:.65}
+.ba-stems{transform:none;stroke-opacity:.8}
+.ba-gift-open{position:relative;z-index:5;display:flex;align-items:center;justify-content:center;gap:14px;min-height:54px;margin:0 auto;padding:15px 27px;border:1px solid #ecd3a0;border-radius:50px;background:#fae9c9;color:#45313e;font:650 13px/1.7 var(--sans,Arial,sans-serif);cursor:pointer;touch-action:manipulation;box-shadow:0 5px 28px #08081333}
+.ba-gift-open svg{width:20px;height:20px;flex:none}.ba-gift-open:hover{background:#fff5df}.ba-gift-open:focus-visible{outline:3px solid #d59aab;outline-offset:5px}.ba-gift-open:disabled{cursor:default;opacity:.7}
+.ba-invitation{text-align:center;font:12px/1.8 var(--sans,Arial,sans-serif);color:#d6c2cb;margin:14px auto 0;max-width:85%;position:relative;z-index:4}
+.ba-arrive:not(.ba-motion-off) .ba-bouquet-svg{animation:ba-bouquet-appear var(--ba-arrival-duration,1.8s) cubic-bezier(.2,.7,.2,1) both}
+.bouquet-arrival[data-style=growing]{background:radial-gradient(ellipse at 50% 24%,#fffaf0,#f1eadc 57%,#e7e6d8);color:#76535d;box-shadow:inset 0 0 0 1px #bea68b38,0 25px 75px #887e6b1a}
+.bouquet-arrival[data-style=growing] .ba-occasion{color:#8c6c62}.bouquet-arrival[data-style=growing] .ba-sender,.bouquet-arrival[data-style=growing] .ba-invitation{color:#857366}
+.bouquet-arrival[data-style=growing] .ba-light-particles{mix-blend-mode:normal;opacity:.7}
+.bouquet-arrival[data-style=growing] .ba-gift-open{background:#86506a;color:#fff9ee;border-color:#86506a}
+.ba-growing.ba-arrive:not(.ba-motion-off) .ba-bouquet-svg{animation:ba-bouquet-appear 1.3s ease-out both}
+/* Move flowers, stems, wrap and light points as one bouquet, never separate halves. */
+.bouquet-arrival[data-phase=opening]:not(.ba-motion-off) .ba-scene{animation:ba-gift-sway var(--ba-open-duration) ease-in-out both}
+.bouquet-arrival[data-phase=opening] .ba-invitation{opacity:.65}
+.ba-paused *{animation-play-state:paused!important}
+.ba-motion-off *{animation:none!important;transition:none!important}
+@keyframes ba-bouquet-appear{from{opacity:.1;transform:translateY(40px) scale(.95)}to{opacity:1;transform:none}}
+
+@keyframes ba-gift-sway{0%,100%{transform:rotate(0)}18%{transform:rotate(-1.2deg)}38%{transform:rotate(1deg)}60%{transform:rotate(-.65deg)}80%{transform:rotate(.3deg)}}
+@media(max-width:620px){#bouquet-arrival{width:calc(100% + 28px);margin-left:-14px}.bouquet-arrival{border-radius:23px;padding:25px 0}.ba-scene{width:116%;margin:0 -8%;min-height:450px;aspect-ratio:1000/1100}.ba-occasion{font-size:8px;letter-spacing:1.5px}.ba-gift-recipient{font-size:28px;margin:7px 20px}.ba-gift-open{width:calc(100% - 40px);padding:14px 12px;font-size:12px;min-height:52px}.ba-invitation{font-size:11px;max-width:83%}.ba-sender{font-size:10px}}
+@media(prefers-reduced-motion:reduce){.bouquet-arrival *{animation:none!important;transition:none!important}}
+
+/* Restore the layered arrival: traced stems, staggered petals, gathered light. */
+.ba-bloom-petals{transform-box:view-box;transform-origin:0 0}
+.ba-arrive:not(.ba-motion-off) .ba-bloom-petals{animation:ba-petals-unfurl 1.4s var(--bloom-delay) cubic-bezier(.2,.72,.25,1) both}
+.ba-arrive:not(.ba-motion-off) .ba-stems>path{stroke-dasharray:1;stroke-dashoffset:0;animation:ba-stem-reach .8s .04s ease-out both}
+.ba-arrive:not(.ba-motion-off) .ba-sprigs{animation:ba-leaves-reveal 1.1s .3s ease-out both}
+.ba-arrive:not(.ba-motion-off) .ba-floral-half>g:not(.ba-bloom){animation:ba-leaves-reveal 1s .4s ease-out both}
+.ba-wrap-left,.ba-wrap-right,.ba-ribbon{transform-box:view-box;transform-origin:500px 960px}
+.ba-arrive:not(.ba-motion-off) .ba-wrap-left{animation:ba-wrap-fan-left 1.35s .15s cubic-bezier(.2,.7,.2,1) both}
+.ba-arrive:not(.ba-motion-off) .ba-wrap-right{animation:ba-wrap-fan-right 1.35s .15s cubic-bezier(.2,.7,.2,1) both}
+.ba-arrive:not(.ba-motion-off) .ba-ribbon{animation:ba-bow-settle 1s 1.15s cubic-bezier(.2,.7,.2,1) both}
+.bouquet-arrival[data-style=stardust].ba-arrive:not(.ba-motion-off) .ba-bloom-petals{animation-delay:calc(var(--bloom-delay) + .35s)}
+.ba-reveal-halo{position:absolute;z-index:2;inset:13% 9% 24%;border-radius:50%;opacity:0;pointer-events:none;background:radial-gradient(ellipse,transparent 45%,#ffe5b133 55%,transparent 67%)}
+.ba-arrive:not(.ba-motion-off) .ba-reveal-halo{animation:ba-halo-bloom 1.6s 1.15s ease-out both}
+.ba-wishes{position:absolute;inset:0;z-index:4;pointer-events:none;overflow:hidden}
+.ba-wishes i{position:absolute;width:18%;height:2px;left:1%;top:23%;border-radius:100%;opacity:0;background:linear-gradient(90deg,transparent,#fff2cd);transform-origin:right center}
+.ba-wishes i:nth-child(2){left:65%;top:37%;width:14%;--wish-delay:.7s}
+.ba-wishes i:nth-child(3){left:27%;top:8%;width:12%;--wish-delay:1.15s}
+.bouquet-arrival[data-style=stardust].ba-arrive:not(.ba-motion-off) .ba-wishes i{animation:ba-wish-trail 1.1s var(--wish-delay,.12s) ease-out both}
+.ba-arrive:not(.ba-motion-off) .ba-constellation{animation:ba-sky-breathe 5s ease-in-out infinite alternate}
+@keyframes ba-petals-unfurl{0%{opacity:0;transform:scale(.12) rotate(-22deg)}18%{opacity:.8}76%{opacity:1;transform:scale(1.045) rotate(2deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
+@keyframes ba-stem-reach{from{stroke-dashoffset:-1;opacity:.1}to{stroke-dashoffset:0;opacity:1}}
+@keyframes ba-leaves-reveal{from{opacity:0}to{opacity:1}}
+@keyframes ba-wrap-fan-left{from{opacity:.1;transform:rotate(9deg) scaleX(.7)}to{opacity:1;transform:none}}
+@keyframes ba-wrap-fan-right{from{opacity:.1;transform:rotate(-9deg) scaleX(.7)}to{opacity:1;transform:none}}
+@keyframes ba-bow-settle{from{opacity:0;transform:scale(.6)}72%{opacity:1;transform:scale(1.06)}to{opacity:1;transform:none}}
+@keyframes ba-halo-bloom{from{opacity:0;transform:scale(.45)}32%{opacity:.8}to{opacity:0;transform:scale(1.45)}}
+@keyframes ba-wish-trail{from{opacity:0;transform:translate(-30px,-20px) rotate(32deg) scaleX(.15)}25%{opacity:.8}to{opacity:0;transform:translate(85px,58px) rotate(32deg) scaleX(1.2)}}
+@keyframes ba-sky-breathe{from{opacity:.35}to{opacity:.8}}
+@media(prefers-reduced-motion:reduce){.bouquet-arrival *{animation:none!important;transition:none!important}}
