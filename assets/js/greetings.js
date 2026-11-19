@@ -82,7 +82,15 @@ const CardGreetings = (() => {
       t('teacher-kind-work', 'Cảm ơn những điều được trao', 'moving',
         'Nhân ngày 20/11, {self} muốn gửi đến {you} một lời cảm ơn dành cho công việc dạy học. Mỗi bài giảng cần sự chuẩn bị, mỗi câu hỏi của học trò cần được lắng nghe; những điều ấy đều đáng được trân trọng.\n\n{Self} kính chúc {you} nhiều sức khỏe, bình an và những ngày làm việc có niềm vui. Mong khi khép lại một ngày, {you} vẫn còn thời gian cho sở thích riêng và những người mình yêu quý.'),
       t('teacher-letter', 'Lời chúc trên trang giấy', 'moving',
-        'Có những lời cảm ơn viết ra thật giản dị, nhưng {self} mong {you} nhận được sự chân thành trong đó. Ngày 20/11, xin gửi đến {you} lời kính chúc sức khỏe và bình an, cùng sự trân trọng dành cho những bài học và sự tận tâm của {you}.\n\nMong con đường dạy học của {you} có thêm nhiều niềm vui, những cuộc gặp tốt đẹp và những khoảng nghỉ vừa đủ. Chúc {you} có một ngày thật ấm áp, cả trong lớp học lẫn cuộc sống riêng.')
+        'Có những lời cảm ơn viết ra thật giản dị, nhưng {self} mong {you} nhận được sự chân thành trong đó. Ngày 20/11, xin gửi đến {you} lời kính chúc sức khỏe và bình an, cùng sự trân trọng dành cho những bài học và sự tận tâm của {you}.\n\nMong con đường dạy học của {you} có thêm nhiều niềm vui, những cuộc gặp tốt đẹp và những khoảng nghỉ vừa đủ. Chúc {you} có một ngày thật ấm áp, cả trong lớp học lẫn cuộc sống riêng.'),
+      t('teacher-first-lesson', 'Bài học em vẫn nhớ', 'moving',
+        'Ngày 20/11, {self} nhớ những lúc {you} kiên nhẫn giảng lại khi {self} chưa hiểu. Nhờ {you}, {self} học được rằng hỏi lại và làm sai đều là một phần của việc học. {Self} cảm ơn {you} và kính chúc {you} luôn mạnh khỏe, an vui.'),
+      t('teacher-thank-the-class', 'Một lời chúc từ cả lớp', 'warm',
+        'Nhân ngày 20/11, cả lớp kính chúc {you} thật nhiều sức khỏe và niềm vui. Cảm ơn {you} vì đã kiên nhẫn trả lời những câu hỏi bất ngờ và luôn vui khi thấy từng bạn tiến bộ. Mong lớp học của {you} lúc nào cũng đầy tiếng cười.'),
+      t('teacher-former-student', 'Gửi từ một học trò cũ', 'moving',
+        'Đã lâu rồi {self} không còn ngồi trong lớp của {you}, nhưng có những điều {you} từng nói mà {self} vẫn nhớ và mang theo đến hôm nay. Nhân ngày 20/11, {self} kính chúc {you} mạnh khỏe, bình an và có nhiều dịp gặp lại những học trò cũ.'),
+      t('teacher-short-gratitude', 'Lời cảm ơn ngắn gọn', 'short',
+        'Chúc mừng ngày 20/11! {Self} kính chúc {you} luôn khỏe mạnh và có thật nhiều giờ lên lớp vui. Cảm ơn {you} đã tin tưởng và động viên {self}.')
     ],
     sister_older: [
       t('older-little-surprise', 'Một bất ngờ cho chị', 'short',

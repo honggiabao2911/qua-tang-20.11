@@ -1,6 +1,6 @@
 # Lời thương · Thiệp 20/11
 
-Website thiệp chúc mừng bằng HTML, CSS, JavaScript thuần. Trang chủ ưu tiên thiệp tri ân Ngày Nhà giáo Việt Nam 20/11. Chọn **Gửi thầy hoặc cô**, rồi chọn **Cô giáo** hoặc **Thầy giáo** trong phần người nhận để có lời chúc và cách xưng hô phù hợp. Thiệp mới đón người nhận bằng **bé B**: đôi mắt ánh sáng thức dậy, nói lời chúc riêng theo quan hệ rồi trao bó hoa lớn từ 2.450 hạt sáng (1.250 trên điện thoại) hoặc hoa mọc nở. Chạm cả bó hoa hoặc nút **Nhận hoa và mở lời chúc** để mở đúng thiệp đã chuẩn bị. Màn đầu không hiển thị tấm thiệp. Tạo lời chúc theo quan hệ, chọn thiết kế từ 41 chủ đề, nghe thử nhạc và chia sẻ nguyên tấm thiệp. Không cần backend, tài khoản, thư viện từ CDN hoặc bước build. Font tiếng Việt nằm trong dự án.
+Website thiệp chúc mừng bằng HTML, CSS, JavaScript thuần. Trang chủ dành cho Ngày Nhà giáo Việt Nam 20/11. Chọn **Chúc thầy** hoặc **Chúc cô**, rồi chọn một trong 10 mẫu trong mục **Chọn lời chúc gợi ý**. Thiệp mới đón người nhận bằng **bé B**: đôi mắt ánh sáng thức dậy, nói lời chúc riêng theo quan hệ rồi trao bó hoa lớn từ 2.450 hạt sáng (1.250 trên điện thoại) hoặc hoa mọc nở. Chạm cả bó hoa hoặc nút **Nhận hoa và mở lời chúc** để mở đúng thiệp đã chuẩn bị. Màn đầu không hiển thị tấm thiệp. Tạo lời chúc theo quan hệ, chọn thiết kế từ 41 chủ đề, nghe thử nhạc và chia sẻ nguyên tấm thiệp. Không cần backend, tài khoản, thư viện từ CDN hoặc bước build. Font tiếng Việt nằm trong dự án.
 
 ## Chạy và triển khai
 
@@ -12,18 +12,18 @@ python3 -m http.server 8000 --bind 127.0.0.1
 
 Dùng trình duyệt trên máy chạy lệnh để mở cổng 8000. Có thể dùng Live Server. Cần phục vụ qua HTTP/HTTPS để kiểm tra tệp nhạc; `file://` không hỗ trợ đầy đủ. Khi gửi thiệp cho người khác, tạo liên kết từ địa chỉ website đã triển khai, không dùng địa chỉ máy cá nhân.
 
-GitHub Pages: trong **Settings → Pages**, chọn **Deploy from a branch → main → /(root)**. Merge Pull Request từ `codex/20-10-premium` vào `main`, rồi chờ tác vụ Pages hoàn tất. Khi tải thủ công, phải đưa lên cả `index.html` và thư mục `assets/`; các module mới không còn nằm hết trong HTML. Giữ các MP3 cũ tại thư mục gốc. Các tệp JS/CSS vừa đổi có mã phiên bản trong URL để tránh dùng bản cache cũ sau khi Pages cập nhật.
+GitHub Pages: trong **Settings → Pages**, chọn **Deploy from a branch → main → /(root)**. Sau khi đẩy bản mới lên `main`, chờ tác vụ Pages hoàn tất. Khi tải thủ công, phải đưa lên cả `index.html` và thư mục `assets/`; các module mới không còn nằm hết trong HTML. Giữ các MP3 cũ tại thư mục gốc. Các tệp JS/CSS vừa đổi có mã phiên bản trong URL để tránh dùng bản cache cũ sau khi Pages cập nhật.
 
 ## Tạo một món quà riêng
 
-Để làm nhanh trên điện thoại: sau khi chọn người nhận, bấm **Tạo nhanh cùng bé B** ở đầu màn tạo thiệp. Bé B chỉ hỏi **tên người gửi → khung cảnh → lời nhắn riêng**. Có thể để trống rồi bấm **Tiếp** hoặc **Bỏ qua** để dùng mặc định theo đúng nhóm. Lời chúc ấm áp (lãng mạn cho người thương), tên người nhận đã điền, nhạc của nhóm và chữ ký theo tên người gửi xuất hiện ngay trong thiệp nháp. Cảnh đêm gợi ý hoa từ hạt sáng; cảnh sáng dùng hoa mọc nở.
+Để làm nhanh trên điện thoại: sau khi chọn người nhận, bấm **Tạo nhanh cùng bé B** ở đầu màn tạo thiệp. Bé B chỉ hỏi **tên người gửi → khung cảnh → lời nhắn riêng**. Có thể để trống rồi bấm **Tiếp** hoặc **Bỏ qua** để dùng mặc định theo đúng nhóm. Lời chúc ấm áp, tên người nhận đã điền, nhạc của nhóm và chữ ký theo tên người gửi xuất hiện ngay trong thiệp nháp. Cảnh đêm gợi ý hoa từ hạt sáng; cảnh sáng dùng hoa mọc nở.
 
-Ở bước xem lại, chọn **Dùng thiệp này**; **Chỉnh thêm nhạc / chữ ký** mở tiếp các mục tùy chọn. **Cùng tạo thiệp** vẫn giữ luồng hỏi đầy đủ. Khi bắt đầu từ trò chuyện ở trang chủ, bé B hỏi thêm người nhận trước ba câu trên. Nhắn “giúp tạo thiệp nhanh cho bà” cũng mở đúng luồng tạo nhanh. Thiệp chính chỉ đổi khi áp dụng; vẫn có hoàn tác.
+Ở bước xem lại, chọn **Dùng thiệp này**; **Chỉnh thêm nhạc / chữ ký** mở tiếp các mục tùy chọn. **Cùng tạo thiệp** vẫn giữ luồng hỏi đầy đủ. Khi bắt đầu từ trò chuyện ở trang chủ, bé B hỏi thêm người nhận trước ba câu trên. Nhắn “giúp tạo thiệp nhanh cho cô” cũng mở đúng luồng tạo nhanh. Thiệp chính chỉ đổi khi áp dụng; vẫn có hoàn tác.
 
-1. Chọn **Gửi thầy hoặc cô** để làm thiệp 20/11. Năm nhóm người nhận còn lại nằm ở mục **Thiệp 20/10**. Chọn cách xưng hô và tên người nhận trong phần cá nhân hóa. Mỗi quan hệ có ít nhất 6 lời gợi ý; sắc thái gồm ngắn gọn, ấm áp, vui vẻ, xúc động, thêm ngọt ngào và lãng mạn cho người thương.
+1. Chọn **Chúc thầy** hoặc **Chúc cô**. Menu **Chọn lời chúc gợi ý** cho phép xem trước từng lời chúc, từ lời ngắn gọn đến lời tri ân của cả lớp hoặc học trò cũ.
 2. Chọn cặp xưng hô hoặc sửa cả cách xưng và cách gọi. Khi đổi quan hệ, cặp xưng hô và lời mẫu cập nhật cùng nhau. Lời tự viết được giữ kèm lựa chọn **Giữ lời tôi viết / Dùng mẫu mới**.
 3. Tên người gửi mặc định trống. Nếu không có tên, toàn bộ chữ ký được ẩn. Không lưu bản nháp vào bộ nhớ trình duyệt và không tự điền tên chủ dự án.
-4. Khi vào màn tạo thiệp hoặc đổi người nhận, thư viện mặc định chỉ hiện **Gợi ý cho người nhận hiện tại**: chọn Bà thì chỉ thấy các mẫu hợp với bà. Chọn **Tất cả không gian** để xem đủ 41 mẫu, hoặc lọc theo **Rực rỡ, Dịu dàng, Lãng mạn, Thanh nhã, Kỳ ảo**. **Phối giúp tôi** chuyển giữa các tổ hợp được chọn theo người nhận; **Phối sẵn theo chủ đề** phục hồi phối cảnh mà vẫn giữ nội dung.
+4. Thư viện mặc định ưu tiên các mẫu tri ân thầy cô. Chọn **Tất cả không gian** để xem thêm các mẫu phù hợp hoặc lọc theo cảm xúc.
 5. Xem thử cảnh mở đầy đủ trong hộp xem trước, hoặc nhảy đến **Bắt đầu / Món quà hoàn chỉnh / Đọc lời chúc**. Bản xem trước dùng cùng bộ dựng cảnh với thiệp thật, không phát nhạc; đóng hộp sẽ dừng và giải phóng cảnh.
 6. Chỉnh chi tiết, chọn nhạc rồi mở thiệp thật. Người nhận chạm nút hoặc vật thể chính để mở; thao tác đó kích hoạt nhạc nếu bài có tệp và trình duyệt cho phép. Cảnh quà chạy đủ nhịp mở rồi tự chuyển sang lời chúc, vẫn giữ món quà bên cạnh để ngắm. Có nút bỏ qua, xem lại và **Giữ lại khoảnh khắc** để tạm dừng chuyển động.
 

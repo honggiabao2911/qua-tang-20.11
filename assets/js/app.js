@@ -63,8 +63,8 @@
   const recipientButtons = [...document.querySelectorAll('[data-recipient]')];
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const variantMemory = { teacher: '', sister: 'older', women: 'friend' };
-  $('theme-filter').querySelector('[value=all]').textContent=`Tất cả ${Object.keys(CardThemes.catalog).length} không gian`;
-  $('theme-gallery').setAttribute('aria-label',`Thư viện ${Object.keys(CardThemes.catalog).length} cảnh mở quà`);
+  $('theme-filter').querySelector('[value=all]').textContent=`Tất cả ${CardRecommendations.teacherThemes().length} không gian`;
+  $('theme-gallery').setAttribute('aria-label',`Thư viện ${CardRecommendations.teacherThemes().length} cảnh mở quà`);
   CardThemes.mount({gallery: $('theme-gallery'), stage: $('theme-stage'), backdrop: $('theme-backdrop')});
   let state = makeDefaultState();
   let helperUndo=null;
@@ -148,8 +148,6 @@
     for (const pair of pairs) select.add(new Option(pair.label, pair.id));
     select.add(new Option('Tùy chỉnh cách xưng và cách gọi', 'custom'));
     select.value = pairs.find(pair => pair.self === state.pronoun && pair.you === state.recipientPronoun)?.id || 'custom';
-    $('lover-call-group').hidden = state.target !== 'lover';
-    $('lover-call').value = ['em yêu','anh yêu','người thương'].includes(state.recipientPronoun) ? state.recipientPronoun : '';
     $('tone-field').replaceChildren();
     for (const [key,label] of Object.entries(TONES)) {
       if (state.target !== 'lover' && ['sweet','romantic'].includes(key)) continue;
@@ -280,7 +278,7 @@
 
   function updateSelectedRecipients() {
     recipientButtons.forEach((button) => {
-      const selected = button.dataset.recipient === state.target && (!button.dataset.variant || button.dataset.variant === state.variant);
+      const selected = button.dataset.recipient === state.target && (button.dataset.variant === undefined || button.dataset.variant === state.variant);
       button.classList.toggle('is-selected', selected);
       button.setAttribute('aria-pressed', String(selected));
     });
@@ -320,8 +318,6 @@
     renderPairs();
     renderDesignControls();
     CardMusic.setStudioGroup(state.target);
-    $('recipient-music-group').value=state.design.musicGroup;
-    $('recipient-music-group').querySelector('[value=""]').textContent=`Theo người nhận (${recipientFor().label})`;
     CardMusic.setGroup(state.design.musicGroup||state.target, state.musicId);
     CardMusic.setVolume(state.volume);
     updateMessageCount();
@@ -546,8 +542,20 @@
       $(`${prefix}-sender`).closest('.paper-sign').hidden = !hasSignature;
     });
     document.querySelectorAll('.paper-sign').forEach(sign=>{sign.dataset.signatureStyle=state.design.signatureStyle;let ink=sign.querySelector('.signature-ink');if(!ink){ink=document.createElementNS('http://www.w3.org/2000/svg','svg');ink.setAttribute('viewBox','0 0 600 180');ink.setAttribute('class','signature-ink');ink.setAttribute('role','img');ink.setAttribute('aria-label','Chữ ký tay của người gửi');sign.append(ink);}CardSignature.render(ink,state.design.signatureInk);});
-    $('sample-title').textContent = text.template.title;
-    $('sample-counter').textContent = `${state.sampleIndex + 1} / ${samplesFor().length}`;
+    const samples = samplesFor();
+    const picker = $('greeting-template');
+    if (picker.options.length !== samples.length || picker.options[0]?.dataset.template !== samples[0].id) {
+      picker.replaceChildren(...samples.map((sample, index) => {
+        const option = new Option(sample.title, String(index));
+        option.dataset.template = sample.id;
+        return option;
+      }));
+    }
+    picker.value = String(state.sampleIndex < samples.length ? state.sampleIndex : 0);
+    const samplePreview = $('greeting-template-preview');
+    const sampleText = CardGreetings.render(text.template, { self: state.pronoun, you: state.recipientPronoun });
+    if (samplePreview.textContent !== sampleText) samplePreview.textContent = sampleText;
+    $('sample-counter').textContent = `${state.sampleIndex + 1} / ${samples.length}`;
     $('envelope-open-button').textContent = GiftScenes.has(state.design.experience) && GiftScenes.phase()==='ready' ? 'Đọc lời chúc đầy đủ' : 'Mở lời chúc dành cho bạn';
     $('envelope-title').textContent = shared ? `Bạn có một lời chúc ${date}` : 'Một lời thương đang chờ';
     $('envelope-subtitle').textContent = state.design.scene === 'galaxy'
@@ -603,7 +611,7 @@
   }
 
   function selectRecipient(target, requestedVariant) {
-    if (!Object.hasOwn(RECIPIENTS,target)) return;
+    if (target !== 'teacher') return;
     if (shared) resetCard();
     $('toast').hidden=true;
     const config = RECIPIENTS[target];
@@ -624,7 +632,11 @@
 
   function changeSample(direction) {
     const length = samplesFor().length;
-    state.sampleIndex = (state.sampleIndex + direction + length) % length;
+    selectGreeting((state.sampleIndex + direction + length) % length);
+  }
+
+  function selectGreeting(index) {
+    state.sampleIndex = index;
     state.greeting = '';
     renderCard();
     if (state.design.body.trim()) showToast('Mẫu gợi ý đã đổi. Bạn đang dùng lời tự viết; chọn “Quay về lời chúc gợi ý” nếu muốn dùng mẫu.');
@@ -943,7 +955,6 @@
       renderCard();
     });
   });
-  $('recipient-music-group').addEventListener('change',()=>{state.design.musicGroup=$('recipient-music-group').value;state.musicId=`${state.design.musicGroup||state.target}:0`;CardMusic.setGroup(state.design.musicGroup||state.target,state.musicId);renderCard();});
   $('theme-gallery').addEventListener('click',event => {
     const button=event.target.closest('[data-theme-preset]');if(button)applyTheme(button.dataset.themePreset);
     const preview=event.target.closest('[data-preview-theme]');if(preview)previewTheme(preview.dataset.previewTheme);
@@ -952,10 +963,10 @@
   function renderThemeRecommendations(){
     const filter=$('theme-filter').value,key=`${state.target}:${state.variant}:${filter}`;
     if(recommendationKey===key)return;recommendationKey=key;
-    const target=filter.startsWith('for-')?filter.slice(4):state.target;
+    const target=state.target;
     const group=CardRecommendations.groupFor(target),label=CardRecommendations.labels[group],recommended=CardRecommendations.idsFor(group);
     $('theme-filter').querySelector('[value=recipient]').textContent=`Gợi ý cho ${CardRecommendations.labels[CardRecommendations.groupFor(state.target)]}`;
-    const entries=[...document.querySelectorAll('.theme-entry')],order=Object.keys(CardThemes.catalog);let visible=0;
+    const entries=[...document.querySelectorAll('.theme-entry')],order=CardRecommendations.teacherThemes();let visible=0;
     entries.sort((a,b)=>{
       const x=recommended.indexOf(a.dataset.entryId),y=recommended.indexOf(b.dataset.entryId);
       const rank=id=>{const t=CardThemes.catalog[id];return t.fresh?100:200;};
@@ -964,7 +975,7 @@
     const fragment=document.createDocumentFragment();
     for(const entry of entries){
       const id=entry.dataset.entryId,match=recommended.includes(id),moods=CardThemes.catalog[id].moods||MOODS[id]||[];
-      entry.hidden=filter==='recipient'||filter.startsWith('for-')?!match:filter!=='all'&&!moods.includes(filter);
+      entry.hidden=!order.includes(id)||(filter==='recipient'?!match:filter!=='all'&&!moods.includes(filter));
       entry.dataset.recommended=String(match);
       let badge=entry.querySelector('.theme-fit');
       if(match){if(!badge){badge=document.createElement('small');badge.className='theme-fit';entry.querySelector('.theme-tile-name').append(badge);}badge.textContent=`Cho ${label}`;}
@@ -972,7 +983,7 @@
       if(!entry.hidden)visible++;fragment.append(entry);
     }
     $('theme-gallery').append(fragment);
-    $('theme-recommendation-status').textContent=`${visible} mẫu đang hiện · ${filter==='all'?'Mẫu hợp với '+label+' được gợi ý ở đầu.':filter==='recipient'||filter.startsWith('for-')?'Gợi ý dành cho '+label+'.':'Bạn đang lọc theo cảm xúc.'} Chọn “Tất cả không gian” để xem đủ ${order.length} mẫu.`;
+    $('theme-recommendation-status').textContent=`${visible} mẫu đang hiện · ${filter==='all'?'Mẫu hợp với '+label+' được gợi ý ở đầu.':filter==='recipient'?'Gợi ý dành cho '+label+'.':'Bạn đang lọc theo cảm xúc.'} Chọn “Tất cả không gian” để xem đủ ${order.length} mẫu.`;
   }
   function guidedState(draft){
     const target=Object.hasOwn(RECIPIENTS,draft.target)?draft.target:state.target;
@@ -993,8 +1004,8 @@
     if(action==='edit-card'){
       const {kind,value,track}=target||{};
       const designKeys={effect:'effect',intensity:'intensity',arrival:'arrival'};
-      if(kind==='theme'&&!Object.hasOwn(CardThemes.catalog,value))return false;
-      if(kind==='music'&&(!Object.hasOwn(RECIPIENTS,value)||!Number.isInteger(track)||track<0||track>5))return false;
+      if(kind==='theme'&&!CardRecommendations.teacherThemes().includes(value))return false;
+      if(kind==='music'&&(value!=='teacher'||!Number.isInteger(track)||track<0||track>5))return false;
       if(designKeys[kind]&&!DESIGN_OPTIONS[designKeys[kind]].includes(value))return false;
       const limits={senderName:100,recipientName:100,welcomeName:30,signatureText:80};
       if(Object.hasOwn(limits,kind)&&(typeof value!=='string'||value.length>limits[kind]))return false;
@@ -1011,9 +1022,9 @@
 
     if(action==='apply-draft'){
       const draft=target;
-      if(!draft||!Object.hasOwn(RECIPIENTS,draft.target)||!Object.hasOwn(CardThemes.catalog,draft.theme))return false;
+      if(!draft||draft.target!=='teacher'||!CardRecommendations.teacherThemes().includes(draft.theme))return false;
       const bounded=(key,max)=>typeof draft[key]==='string'&&draft[key].length<=max;
-      if(!['recipientName','senderName'].every(key=>bounded(key,100))||!bounded('body',1000)||!bounded('message',1000)||!bounded('signatureText',80)||!['stardust','growing'].includes(draft.arrival)||!Number.isInteger(draft.track)||draft.track<0||draft.track>5||(draft.musicGroup&&!Object.hasOwn(RECIPIENTS,draft.musicGroup)))return false;
+      if(!['recipientName','senderName'].every(key=>bounded(key,100))||!bounded('body',1000)||!bounded('message',1000)||!bounded('signatureText',80)||!['stardust','growing'].includes(draft.arrival)||!Number.isInteger(draft.track)||draft.track<0||draft.track>5||draft.musicGroup)return false;
       helperUndo={state:structuredClone(state),arrivalEdited,pronounEdited,variants:{...variantMemory}};
       const next=guidedState(draft),config=RECIPIENTS[draft.target];
       state=next;shared=false;arrivalEdited=true;pronounEdited=false;removeFragment();
@@ -1029,15 +1040,15 @@
       if(target==='share'){showToast('Mở thiệp bằng “Mở thiệp yêu thương”, rồi chọn Chia sẻ hoặc Sao chép liên kết.');return;}
       if(['help','privacy','deploy','mobile'].includes(target))return;
       if(screen!=='editor')selectRecipient(state.target);
-      const ids={journey:'arrival-style',arrival:'arrival-style',music:'recipient-music-group',studio:'studio-music-toggle',welcome:'welcome-script-mode',signature:'signature-text',recipient:'back-to-recipients',names:'recipient-name',words:'personal-message',secret:'secret-message',design:'effect-field',effects:'effect-field',preview:'preview-welcome',themes:'theme-filter'};
+      const ids={journey:'arrival-style',arrival:'arrival-style',music:'studio-music-toggle',studio:'studio-music-toggle',welcome:'welcome-script-mode',signature:'signature-text',recipient:'back-to-recipients',names:'recipient-name',words:'greeting-template',secret:'secret-message',design:'effect-field',effects:'effect-field',preview:'preview-welcome',themes:'theme-filter'};
       if(ids[target])focusElement($(ids[target]),true);return;
     }
     if(screen!=='editor')selectRecipient(target||state.target);
-    if(action==='themes'){$('theme-filter').value=target?`for-${target}`:'recipient';renderThemeRecommendations();focusElement($('theme-filter'),true);}
+    if(action==='themes'){$('theme-filter').value='recipient';renderThemeRecommendations();focusElement($('theme-filter'),true);}
     else if(action==='music')focusElement($('studio-music-toggle'),true);
     else if(action==='welcome')focusElement($('welcome-script-mode'),true);
     else if(action==='signature')focusElement($('signature-text'),true);
-    else if(action==='words')focusElement(fields.message,true);
+    else if(action==='words')focusElement($('greeting-template'),true);
     else if(action==='recipient')focusElement($('back-to-recipients'),true);
   }
   const MOODS={galaxy:['fantasy','bright'],aurora:['fantasy','gentle'],garden:['gentle'],rose:['romantic'],sunflower:['bright'],lotus:['elegant','gentle'],moonlake:['gentle','fantasy'],butterfly:['bright','fantasy'],letter:['elegant'],pearl:['elegant'],crystal:['romantic'],lovegalaxy:['romantic','fantasy']};
@@ -1054,14 +1065,6 @@
     const pair=CardGreetings.getPairs(pairKey()).find(pair=>pair.id===event.target.value);
     if(pair){state.pronoun=pair.self;state.recipientPronoun=pair.you;state.greeting='';fields.pronoun.value=pair.self;fields.recipientPronoun.value=pair.you;renderPairs();renderCard();}
     else focusElement(fields.pronoun,true);
-  });
-  $('lover-call').addEventListener('change',event=>{
-    const pair=CardGreetings.defaultPair('lover');
-    const value=event.target.value==='name'?state.recipientName.trim():event.target.value;
-    if(event.target.value==='name'&&!value){showToast('Điền tên người nhận trước khi dùng tên để xưng hô.');return;}
-    if(value)state.recipientPronoun=value;
-    else state.recipientPronoun=state.pronoun==='em'?'anh':state.pronoun==='mình'?'cậu':pair.you;
-    fields.recipientPronoun.value=state.recipientPronoun;state.greeting='';renderPairs();renderCard();
   });
   $('tone-field').addEventListener('change',event=>{state.tone=event.target.value;state.sampleIndex=0;state.greeting='';renderCard();});
   $('keep-custom-content').addEventListener('click',()=>{$('content-change-notice').hidden=true;});
@@ -1150,11 +1153,11 @@
     resetPair();
     $('editor-title').textContent = `Một lời chúc dành cho ${recipientFor().you}`;
     $('selected-recipient-label').textContent = recipientFor().label;
-    $('recipient-music-group').querySelector('[value=""]').textContent = `Theo người nhận (${recipientFor().label})`;
     updateSelectedRecipients();
     renderCard();
     studioHelper.contextChanged?.();
   });
+  $('greeting-template').addEventListener('change', event => selectGreeting(Number(event.target.value)));
   $('prev-greeting').addEventListener('click', () => changeSample(-1));
   $('next-greeting').addEventListener('click', () => changeSample(1));
   $('preview-button').addEventListener('click', () => {

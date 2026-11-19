@@ -12,5 +12,9 @@
   });
   const groupFor=target=>target==='friend'?'women':Object.hasOwn(groups,target)?target:'women';
   const idsFor=target=>groups[groupFor(target)].filter(id=>Object.hasOwn(CardThemes.catalog,id));
-  window.CardRecommendations=Object.freeze({labels,groupFor,idsFor});
+  const teacherThemes=()=>Object.keys(CardThemes.catalog).filter(id=>{
+    const recipients=CardThemes.catalog[id].recipients;
+    return !['lovegalaxy','heartgarden'].includes(id)&&(!recipients?.length||recipients.includes('teacher'));
+  });
+  window.CardRecommendations=Object.freeze({labels,groupFor,idsFor,teacherThemes});
 })();

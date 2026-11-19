@@ -2,24 +2,24 @@
 (() => {
   'use strict';
   const clean=s=>String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[đĐ]/g,'d').toLowerCase().trim();
-  const groups={mom:'Mẹ',grandma:'Bà',teacher:'Cô giáo',sister:'Chị / em gái',women:'Bạn nữ / nhóm phụ nữ',lover:'Người thương'};
+  const groups={teacher:'Thầy cô'};
   const teacherAddress = /\bthay (?:giao|co)\b|(?:cho|gui|tang|den|loi chuc)\s+thay\b|^thay$/;
   const femaleTeacherAddress = /\bco giao\b|(?:cho|gui|tang|den|loi chuc)\s+co\b|^co$/;
-  function targetFor(q){return [[/nguoi thuong|nguoi yeu|tinh yeu/,'lover'],[teacherAddress,'teacher'],[femaleTeacherAddress,'teacher'],[/giao vien|nha giao/,'teacher'],[/\bme\b/,'mom'],[/\bba\b/,'grandma'],[/chi gai|em gai|chi em/,'sister'],[/ban nu|ban be|phu nu|nhom/,'women']].find(([r])=>r.test(q))?.[1];}
+  function targetFor(q){
+    return teacherAddress.test(q)||femaleTeacherAddress.test(q)||/giao vien|nha giao/.test(q)?'teacher':undefined;
+  }
   function variantFor(target, query, fallback = '') {
     if (target === 'teacher') {
       if (teacherAddress.test(query)) return 'thay';
       if (femaleTeacherAddress.test(query)) return '';
     }
-    if (target === 'sister' && /em gai/.test(query)) return 'younger';
-    if (target === 'women' && /ban nu|ban be/.test(query)) return 'friend';
     return fallback;
   }
   const faq=[
     [/thiep cua (toi|minh)|dang chon gi|tom tat thiep|nhac dang chon/,'help',c=>`Thiệp hiện gửi ${groups[c.target]||'người nhận'}, xưng ${c.pronoun||'mình'} – ${c.recipientPronoun||'bạn'}. Mẫu: ${CardThemes.catalog[c.experience]?.name||'thiệp cổ điển'}. Nhạc gửi: ${groups[c.musicGroup||c.target]||'theo người nhận'} · bài ${Number(c.musicId?.split(':')[1]||0)+1}. Nhạc lúc viết vẫn theo nhóm người nhận. Bạn có thể chỉnh từng mục hoặc cùng mình tạo một bản nháp mới.`],
     [/mon qua dau|dau tien|mo lien ket|mo link|trinh tu|hanh trinh|sau bo hoa|khi mo thiep/,'journey',c=>c.welcome==='none'?`Với thiết lập hiện tại, người nhận thấy ${c.arrival==='classic'?'cảnh mở của mẫu thiệp':'bó hoa '+(c.arrival==='stardust'?'kết từ hạt sáng':'mọc lên rồi nở')+' trước'}. Sau khi chạm mở, cảnh của mẫu chạy rồi lời chúc hiện ra; cảnh và hiệu ứng vẫn ở lại cạnh thiệp.`:'Với thiết lập hiện tại: bé B chào trước → trao bó hoa → người nhận chạm hoa → cảnh mở của mẫu đã chọn → đọc thiệp. Cảnh và hiệu ứng vẫn ở lại cùng lời chúc. Bạn có thể tắt màn chào hoặc đổi kiểu hoa ở phần màn chào và bó hoa.'],
-    [/nhac.*(mat|thieu|khong nghe|khong co)|khong.*nhac/,'music','Nếu thiếu bài, web sẽ báo ngay trong danh sách. Thêm đúng tệp assets/music/0me.mp3…5me.mp3 (ba, co, chi, nu, yeu cho các nhóm khác), rồi chọn kiểm tra lại nhạc. Điện thoại có thể yêu cầu người nhận chạm Bật nhạc; web không thể vượt quyền tự phát của trình duyệt.'],
-    [/doi nhom.*nhac|nhom nhac|nhac.*nhom|nhac cho nguoi nhan|chon bai/,'music','Ngay tại “Nhạc cho người nhận”, mở “Chọn nhóm nhạc cho tấm thiệp”. Chỉ chọn nhóm khác khi bạn muốn tìm bài ngoài nhóm của người nhận. Chọn một trong sáu bài rồi Nghe thử. Nhóm, bài và âm lượng được gửi cùng thiệp; người nhận và cách xưng hô vẫn giữ nguyên.'],
+    [/nhac.*(mat|thieu|khong nghe|khong co)|khong.*nhac/,'music','Nếu thiếu bài, web sẽ báo ngay trong danh sách. Thêm đúng tệp assets/music/0co.mp3…5co.mp3, rồi chọn kiểm tra lại nhạc. Điện thoại có thể yêu cầu người nhận chạm Bật nhạc; web không thể vượt quyền tự phát của trình duyệt.'],
+    [/doi nhom.*nhac|nhom nhac|nhac.*nhom|nhac cho nguoi nhan|chon bai/,'music','Mở phần “Nhạc cho người nhận”. Chọn một trong sáu bài rồi Nghe thử. Nhóm, bài và âm lượng được gửi cùng thiệp; người nhận và cách xưng hô vẫn giữ nguyên.'],
     [/nhac lam thiep|ngau nhien|random/,'studio','Nhạc làm thiệp chọn ngẫu nhiên trong nhóm người nhận hiện tại, chỉ phát khi bạn bấm bật. Đổi bài ngẫu nhiên tránh lặp ngay bài vừa nghe. Đây là nhạc lúc viết, không thay bài bạn chọn để gửi.'],
     [/nhac chao|hop nhac|nhac.*be b/,'welcome','Bật “Nhạc hộp nhạc cho màn chào” để dùng nhạc chào riêng. Khi bé B trao hoa, âm thanh chuyển sang bản bạn chọn cho người nhận. Trên máy chặn tự phát, người nhận chạm nút bật nhạc nhé.'],
     [/am luong|to qua|nho qua/,'music','Âm lượng nhạc lúc viết có thanh riêng. Âm lượng gửi cho người nhận nằm trong phần nhạc của thiệp. Khi đổi bản nghe thử, web chỉ dùng một trình phát để tránh chồng nhạc.'],
@@ -32,26 +32,26 @@
     [/ky ten|chu ky|ky tay|chu viet tay/,'signature','Phần chữ ký cho viết tên/lời ký hoặc vẽ bằng chuột, ngón tay. Có kiểu chữ ký để chọn, nút xóa nét và lựa chọn hiện chữ ký trên giấy. Chữ ký vẽ nhiều nét làm liên kết dài hơn một chút.'],
     [/xung ho|anh chuc ban|chi gai|em gai|doi nguoi|doi doi tuong/,'recipient','Đổi người nhận ở đầu trang để chọn đúng nhóm. Chị / em gái có lựa chọn riêng; bạn nữ có một người hoặc nhóm. Trong lời chúc, chọn cặp xưng hô hoặc sửa cả cách tự xưng và gọi người nhận. Lời mẫu đổi theo cặp đó; lời bạn tự viết cần tự kiểm tra lại.'],
     [/ten nguoi|ten toi|ten gui|ten nhan|nguoi gui/,'names','Tên người gửi để trống mặc định, không tự gợi tên chủ web. Bạn điền tên người gửi và tên người nhận ở phần lời chúc; tên nhân vật đưa quà là một ô riêng trong màn chào.'],
-    [/loi chuc|viet gi|cam dong|lang man|tinh cam/,'words','Mỗi nhóm có lời gợi ý riêng và các giọng phù hợp. Người thương có lời tình cảm; mẹ, bà, thầy và cô dùng cách xưng hô riêng. Dùng nút trước/sau để đổi lời, viết lời nhắn riêng hoặc thay toàn bộ nội dung ở phần tự thiết kế. Muốn mình hỏi từng bước, bấm Cùng tạo thiệp; mình sẽ dùng đúng nhóm bạn đã chọn.'],
+    [/loi chuc|viet gi|cam dong|lang man|tinh cam/,'words','Chọn lời chúc gợi ý cho thầy hoặc cô trong phần Lời chúc, viết lời nhắn riêng hoặc thay toàn bộ nội dung ở phần tự thiết kế. Muốn mình hỏi từng bước, bấm Cùng tạo thiệp; mình sẽ dùng đúng nhóm bạn đã chọn.'],
     [/loi nhan rieng|noi dung|tu viet|viet loi|chinh chu/,'words','Bạn có thể thêm lời nhắn riêng bên dưới lời mẫu, hoặc thay toàn bộ lời chúc bằng nội dung tự viết. Khi đổi mẫu, phần bạn đã tự viết được giữ; dùng Quay về lời chúc gợi ý để dùng lời mẫu lại.'],
     [/bi mat|an loi|dieu muon noi|loi nhan an/,'secret','“Một điều muốn nói” tạo nút riêng trong thiệp, chạm mới hiện lời nhắn. Đây là cách mở bất ngờ, không có mật khẩu: ai có liên kết đều có thể mở.'],
     [/mau sac|bang mau|doi mau|phong chu|co chu|bo cuc|giay|diem xuyet|ngay 20|hien ngay/,'design','Phần tùy chỉnh giấy có bảng màu, phông và cỡ chữ, bố cục, điểm xuyết, hiện ngày trên thiệp và chữ ký. Bản xem trước cập nhật ngay. Mẫu không gian quyết định cảnh bên ngoài; các nút này đổi phần giấy và chữ.'],
     [/hieu ung|lap lanh|buom|trai tim|cuong do|chuyen dong|lag|muot/,'effects','Hiệu ứng có cánh hoa, bướm, đom đóm, trái tim, bong bóng và sao, cùng mức nhẹ/vừa/điện ảnh/tắt. Cảnh mở chạy một lần, rồi chuyển sang chuyển động nhẹ khi đọc. Máy chậm nên chọn Nhẹ; cài đặt giảm chuyển động của thiết bị cũng được tôn trọng. Có nút xem thử để so sánh.'],
     [/xem thu|xem truoc|thu thiep|mo thiep ngay|xem lai|lam lai/,'preview','Xem cảnh mở cho xem đúng mẫu đang cân nhắc; Xem thử màn chào hoặc Mở thiệp yêu thương cho xem cả hành trình. Trong trang nhận thiệp có nút xem lại và Tạo một tấm thiệp để quay về làm thiệp mới.'],
-    [/mau|chu de|khong gian|loc|goi y/,'themes',c=>`Có ${Object.keys(CardThemes.catalog).length} không gian. Với ${groups[c.target]||'người nhận'}, mình gợi ý ${CardRecommendations.idsFor(c.target).slice(0,3).map(id=>CardThemes.catalog[id].name).join(', ')}. Bộ lọc có từng nhóm người nhận và cảm xúc. Lọc chỉ đổi các mẫu đang xem; những mẫu cũ vẫn ở Tất cả không gian.`],
+    [/mau|chu de|khong gian|loc|goi y/,'themes',c=>`Có ${CardRecommendations.teacherThemes().length} không gian. Với ${groups[c.target]||'người nhận'}, mình gợi ý ${CardRecommendations.idsFor(c.target).slice(0,3).map(id=>CardThemes.catalog[id].name).join(', ')}. Dùng bộ lọc để chọn mẫu gợi ý hoặc chọn theo cảm xúc. Lọc chỉ đổi các mẫu đang xem; những mẫu cũ vẫn ở Tất cả không gian.`],
     [/dien thoai|iphone|android|man hinh|ban phim/,'mobile','Thiệp dùng được trên điện thoại: chạm hoa để mở, chạm hoa có số để đọc lời nhắn, dùng ngón tay ký tên. Bé B nằm ở góc và có thể thu gọn. Nếu máy chậm, chọn hiệu ứng Nhẹ; nếu nhạc chưa phát, chạm bật nhạc.'],
     [/github|pages|trien khai|phien ban cu/,'deploy','Website chạy trên GitHub Pages. Mã mới chỉ lên trang chính sau khi nhánh được merge vào main và Pages triển khai xong. Nếu còn bản cũ, tải lại trang hoặc mở cửa sổ riêng tư. Nội dung từng thiệp nằm trong link bạn gửi.'],
     [/xoa|khoi phuc|mac dinh|dat lai/,'design','Nút khôi phục tùy chỉnh đưa giấy và hiệu ứng về mẫu đã chọn, giữ nội dung cá nhân và chữ ký. Đổi mẫu cũng giữ lời bạn đã viết. Nếu muốn thay lời riêng bằng gợi ý, chọn Quay về lời chúc gợi ý.'],
     [/huong dan|giup gi|lam duoc gi|toan bo|cach dung/,'help','Mình hướng dẫn ngay trên trang: người nhận, lời chúc/xưng hô, mẫu/cảnh mở, hoa, nhạc, lời nhân vật, chữ ký, hiệu ứng và chia sẻ. Mình còn hỏi từng bước và điền bản nháp thiệp cho bạn. Bấm Cùng tạo thiệp theo người nhận đang chọn, hoặc hỏi “Món quà đầu tiên khi mở liên kết là gì?”.']
   ];
   function resolveTheme(text,target){
-    const q=clean(text).replace(/[.!?]/g,'').trim(),ids=Object.keys(CardThemes.catalog);
+    const q=clean(text).replace(/[.!?]/g,'').trim(),ids=CardRecommendations.teacherThemes();
     const exact=ids.find(id=>clean(CardThemes.catalog[id].name)===q||id===q);
     if(exact)return exact;
     const named=ids.find(id=>q.includes(clean(CardThemes.catalog[id].name)));
     if(named)return named;
-    const aliases=[[/ngan ha|vu tru|mau den|nen den|^den$/ ,target==='lover'?'lovegalaxy':'galaxy'],[/sach|trang giay/,target==='teacher'?'teachingbook':'storybook'],[/cay hoa|cay loi nhan/,target==='teacher'?'teacherbloom':'wishtree'],[/bang phan|buc giang|giang bai/,'classroom'],[/om con|me om|vong tay/,'motherhug'],[/tra.*ba|ba.*tra/,'grandmatea'],[/xanh|vuon/,'garden'],[/hoa hong|mau hong/,'rose'],[/sen/,'lotus'],[/khinh khi cau/,'balloon'],[/tim pha le/,'crystal']];
-    const alias=aliases.find(([pattern])=>pattern.test(q));if(alias)return alias[1];
+    const aliases=[[/ngan ha|vu tru|mau den|nen den|^den$/ ,target==='lover'?'lovegalaxy':'galaxy'],[/sach|trang giay/,target==='teacher'?'teachingbook':'storybook'],[/cay hoa|cay loi nhan/,target==='teacher'?'teacherbloom':'wishtree'],[/bang phan|buc giang|giang bai/,'classroom'],[/xanh|vuon/,'garden'],[/hoa hong|mau hong/,'rose'],[/sen/,'lotus'],[/khinh khi cau/,'balloon'],[/tim pha le/,'crystal']];
+    const alias=aliases.find(([pattern,id])=>ids.includes(id)&&pattern.test(q));if(alias)return alias[1];
     const mood=[[/lang man|tinh cam/,'romantic'],[/lap lanh|ky ao/,'fantasy'],[/diu dang|am ap|nhe nhang/,'gentle'],[/vui|ruc ro|tuoi sang/,'bright'],[/thanh nha|trang nha/,'elegant']].find(([r])=>r.test(q))?.[1];
     return mood?CardRecommendations.idsFor(target).find(id=>(CardThemes.catalog[id].moods||[]).includes(mood)):null;
   }
@@ -76,13 +76,13 @@
       const flash=document.createElement('span');flash.className='helper-selfie-flash';flash.setAttribute('aria-hidden','true');
       const sparkle=document.createElement('span');sparkle.className='helper-selfie-sparkle';sparkle.textContent='✧';sparkle.setAttribute('aria-hidden','true');face.append(glasses,ball,stars,phone,flash,sparkle);
     }
-    let opened=false,visible=false,expression=0,idle=0,nudgeTimer=0,nudges=0,acts=0,dismissed=false,draft=null,step=0,lastApplied=false,applying=false,baseTarget='',otherMusic=false,drawing=false;
+    let opened=false,visible=false,expression=0,idle=0,nudgeTimer=0,nudges=0,acts=0,dismissed=false,draft=null,step=0,lastApplied=false,applying=false,baseTarget='',drawing=false;
     const fullStages=['recipient','recipientName','senderName','theme','words','message','arrival','music','signature'];
     const quickStages=['recipient','senderName','theme','message'];let stages=fullStages,quick=false,startOffset=0,composing=false,logFrame=0;
     const moods=['happy','curious','shy','love','wink','sleep'];let moodIndex=0;
     const labelFor=target=>groups[CardRecommendations.groupFor(target)]||'người nhận';
     const scopedTarget=()=>draft?.target||getContext().target||'teacher';
-    const recipientLabel=(target,variant)=>target==='teacher'&&variant==='thay'?'Thầy giáo':labelFor(target);
+    const recipientLabel=(target,variant)=>target==='teacher'?(variant==='thay'?'Thầy giáo':'Cô giáo'):labelFor(target);
     function append(text,user=false){
       const p=document.createElement('p');p.className='helper-bubble'+(user?' helper-user':'');p.textContent=text;log.append(p);
       while(log.children.length>12)log.firstElementChild.remove();log.scrollTop=log.scrollHeight;
@@ -181,32 +181,27 @@
       quick=fast;stages=fast?quickStages:fullStages;
       draft={target:target||'',variant:variantFor(target,q,target===context.target?context.variant:''),recipientName:'',senderName:'',theme:'',body:'',message:'',arrival:'growing',musicGroup:'',track:0,signatureText:''};
       if(fast){draft.recipientName=target===context.target?context.recipientName||'':'';draft.tone=target==='lover'?'romantic':'warm';}
-      step=target?1:0;startOffset=step;input.value='';baseTarget=`${context.target}:${context.variant||''}`;lastApplied=false;otherMusic=false;host.dataset.wizard='true';
+      step=target?1:0;startOffset=step;input.value='';baseTarget=`${context.target}:${context.variant||''}`;lastApplied=false;host.dataset.wizard='true';
       append(fast?'Tớ lo phần phối thiệp nhé! Bạn chỉ cần tên người gửi, chọn cảnh và thêm một lời riêng nếu muốn. Thiệp nháp ở phía trên, xong rồi vẫn sửa được mọi chi tiết.':'Mình cùng tạo thiệp nhé! Thiệp nháp ngay phía trên sẽ đổi theo câu trả lời, chưa sửa thiệp chính. Bạn có thể bỏ qua, quay lại, nhờ mình sửa một mục hoặc hủy bất cứ lúc nào.');ask();
     }
     function musicOptions(){
-      const target=draft.musicGroup||draft.target,label=recipientLabel(target,draft.variant);
-      return [...Array.from({length:6},(_,i)=>[`${label} · Bài ${i+1}`,()=>receive(`bài ${i+1}`)]),['Chọn nhóm nhạc khác',()=>{
-        otherMusic=true;append(`Đang chọn nhạc cho ${label}. Chỉ đổi nhóm nếu bạn muốn; người nhận thiệp vẫn là ${labelFor(draft.target)}.`);
-        setExample(`Ví dụ: “nhạc cho ${labelFor(draft.target).toLocaleLowerCase('vi')} bài 3”.`);
-        choices([...Object.entries(groups).map(([id,name])=>[name,()=>{draft.musicGroup=id===draft.target?'':id;otherMusic=false;ask();}]),['Giữ nhóm hiện tại',()=>{otherMusic=false;ask();}]]);
-      }]];
+      return Array.from({length:6},(_,index)=>[`Bài ${index+1}`,()=>receive(`bài ${index+1}`)]);
     }
     function ask(){
-      react('curious');otherMusic=false;const key=stages[step],target=scopedTarget(),label=recipientLabel(target,draft.variant),small=label.toLocaleLowerCase('vi');let prompt='',hint='',placeholder='',options=[];
-      const examples={mom:{name:'Mẹ',signature:'Thương mẹ, An'},grandma:{name:'Ngoại',signature:'Cháu thương bà · An'},teacher:draft.variant==='thay'?{name:'Thầy Minh',signature:'Học trò của thầy · An'}:{name:'Cô Lan',signature:'Học trò của cô · An'},sister:{name:draft?.variant==='younger'?'Em Linh':'Chị Linh',signature:'Thương thật nhiều · An'},women:{name:draft?.variant==='group'?'Những người bạn quý mến':'Linh',signature:'Gửi một chút niềm vui · An'},lover:{name:'Em thương',signature:'Thương em · An'}}[CardRecommendations.groupFor(target)];
-      if(key==='recipient'){prompt='Bạn muốn làm thiệp cho ai?';hint='Ví dụ: “Cô giáo” hoặc “Thầy giáo”.';options=['Cô giáo','Thầy giáo',...Object.entries(groups).filter(([id])=>id!=='teacher').map(([,name])=>name)].map(name=>[name,()=>receive(name)]);}
+      react('curious');const key=stages[step],target=scopedTarget(),label=recipientLabel(target,draft.variant),small=label.toLocaleLowerCase('vi');let prompt='',hint='',placeholder='',options=[];
+      const examples=draft.variant==='thay'?{name:'Thầy Minh',signature:'Học trò của thầy · An'}:{name:'Cô Lan',signature:'Học trò của cô · An'};
+      if(key==='recipient'){prompt='Bạn muốn làm thiệp cho ai?';hint='Ví dụ: “Cô giáo” hoặc “Thầy giáo”.';options=['Thầy giáo','Cô giáo'].map(name=>[name,()=>receive(name)]);}
       else if(key==='recipientName'){prompt=`Thiệp dành cho ${label}. Bạn muốn ghi tên hoặc gọi thân mật thế nào?`;hint=`Ví dụ: “${examples.name}”. Bỏ qua để giữ cách gọi theo nhóm.`;placeholder=`Ví dụ: ${examples.name}`;}
-      else if(key==='senderName'){prompt=quick?'Tớ nên ghi tên người gửi là gì?':'Bạn muốn ghi tên người gửi là gì?';hint='Ví dụ: “An” hoặc “Hai chị em”. Bỏ qua nếu không muốn ghi tên.';placeholder='Ví dụ: An';}
+      else if(key==='senderName'){prompt=quick?'Tớ nên ghi tên người gửi là gì?':'Bạn muốn ghi tên người gửi là gì?';hint='Ví dụ: “An” hoặc “Tập thể lớp 9A”. Bỏ qua nếu không muốn ghi tên.';placeholder='Ví dụ: An';}
       else if(key==='theme'){
         const themes=CardRecommendations.idsFor(target).slice(0,3);prompt=`Bạn thích khung cảnh nào cho ${small}?`;
         hint=`Ví dụ: “${CardThemes.catalog[themes[0]].name}”, “màu xanh dịu dàng” hoặc “nền đen ngân hà”.`;placeholder='Ví dụ: nền đen ngân hà';
         options=themes.map(id=>[CardThemes.catalog[id].name,()=>receive(CardThemes.catalog[id].name)]);
       }
       else if(key==='words'){prompt='Bạn tự viết lời chúc hay để mình chọn lời phù hợp?';hint=`Ví dụ: “${contextExample().greeting.slice(0,110)}…” Hoặc chọn lời gợi ý đúng cách xưng hô.`;placeholder='Viết lời chúc hoặc gõ “gợi ý”';options=[['Để bé B chọn lời gợi ý',()=>receive('gợi ý')]];}
-      else if(key==='message'){prompt=quick?`Thêm một lời riêng cho ${small}, hay dùng lời tớ đã chọn nhé?`:`Có điều riêng muốn nhắn thêm cho ${small} không?`;if(quick)options=[['Dùng lời bé B đã chọn',()=>receive('gợi ý')]];hint=`Ví dụ: “Cảm ơn ${draft.target==='grandma'?'bà':draft.target==='teacher'?(draft.variant==='thay'?'thầy':'cô'):draft.target==='mom'?'mẹ':'người nhận'} đã luôn ở bên và lắng nghe.” Bỏ qua nếu đã đủ ý.`;placeholder='Một điều bạn muốn gửi riêng…';}
+      else if(key==='message'){prompt=quick?`Thêm một lời riêng cho ${small}, hay dùng lời tớ đã chọn nhé?`:`Có điều riêng muốn nhắn thêm cho ${small} không?`;if(quick)options=[['Dùng lời bé B đã chọn',()=>receive('gợi ý')]];hint=`Ví dụ: “Cảm ơn ${draft.variant==='thay'?'thầy':'cô'} đã luôn ở bên và lắng nghe.” Bỏ qua nếu đã đủ ý.`;placeholder='Một điều bạn muốn gửi riêng…';}
       else if(key==='arrival'){prompt='Bạn muốn bó hoa xuất hiện theo kiểu nào?';hint='Hạt sáng: các đốm sáng hội tụ thành hoa. Mọc nở: cành lớn dần rồi hoa hé cánh. Sau đó mới mở cảnh và lời chúc.';options=[['Hoa từ hạt sáng',()=>receive('hạt sáng')],['Hoa mọc rồi nở',()=>receive('mọc lên')]];}
-      else if(key==='music'){const musicLabel=recipientLabel(draft.musicGroup||target,draft.variant);prompt=`Chọn một trong sáu bài nhạc cho ${musicLabel.toLocaleLowerCase('vi')} nhé.`;hint=`Ví dụ: “bài 3”. Mặc định dùng nhạc ${small}; mở “Chọn nhóm nhạc khác” nếu muốn lấy bài từ nhóm khác.`;placeholder='Ví dụ: bài 3';options=musicOptions();}
+      else if(key==='music'){const musicLabel=recipientLabel(draft.musicGroup||target,draft.variant);prompt=`Chọn một trong sáu bài nhạc cho ${musicLabel.toLocaleLowerCase('vi')} nhé.`;hint=`Ví dụ: “bài 3”. Bỏ qua để giữ bài đầu tiên.`;placeholder='Ví dụ: bài 3';options=musicOptions();}
       else if(key==='signature'){prompt='Bạn muốn ký lời gì cuối thiệp?';hint=`Ví dụ: “${examples.signature}” (tối đa 80 ký tự). Có thể bỏ qua và ký tay sau.`;placeholder=`Ví dụ: ${examples.signature}`;}
       else return review();
       if(['recipient','theme','arrival','music'].includes(key)&&matchMedia('(max-width:620px)').matches)input.blur();
@@ -232,7 +227,7 @@
       const q=clean(text),target=scopedTarget();let edit=null,description='';
       if(/lam sao|the nao|o dau|la gi[?!.]*$/.test(q))return false;
       const theme=q.match(/^(?:hay |giup (?:toi|minh) )?(?:doi|chon|dung) (?:mau|chu de|khung canh)\s+(.+)/);
-      if(theme){const id=resolveTheme(theme[1],target);if(!id){append('Mình chưa nhận ra mẫu đó. Bạn thử tên mẫu trong thư viện hoặc “ngân hà”, “màu xanh”, “quyển sách”, “mẹ ôm con” nhé.');return true;}edit={kind:'theme',value:id};description=`mẫu ${CardThemes.catalog[id].name}`;}
+      if(theme){const id=resolveTheme(theme[1],target);if(!id){append('Mình chưa nhận ra mẫu đó. Bạn thử tên mẫu trong thư viện hoặc “ngân hà”, “màu xanh”, “quyển sách”, “bảng phấn” nhé.');return true;}edit={kind:'theme',value:id};description=`mẫu ${CardThemes.catalog[id].name}`;}
       const music=q.match(/^(?:(?:doi|chon|dung|lay)\s+)?(?:nhac\s+)?(?:bai\s+([1-6])|nhac\s+(?:cho\s+)?(.+?)(?:\s+bai\s+([1-6]))?)$/);
       if(!edit&&music&&(music[1]||music[3]||targetFor(q))){const group=targetFor(q)||draft?.musicGroup||getContext().musicGroup||target,index=Number(music[1]||music[3]||1)-1;edit={kind:'music',value:group,track:index};description=`nhạc ${labelFor(group)} · bài ${index+1}`;}
       if(!edit&&/^(tat|bo) hieu ung/.test(q)){edit={kind:'effect',value:'none'};description='tắt hiệu ứng hạt khi đọc';}
@@ -273,7 +268,7 @@
       }else if(key==='arrival')draft.arrival=/hat|sao|lap lanh/.test(q)?'stardust':'growing';
       else if(key==='music'){
         const target=targetFor(q),num=q.match(/(?:bai\s*|^)([1-6])\b/);
-        if(!skip&&!target&&!num&&!/theo nguoi nhan/.test(q)){append(`Bạn thử “bài 2” để dùng nhạc ${labelFor(draft.target)}, hoặc mở Chọn nhóm nhạc khác nhé.`);return;}
+        if(!skip&&!target&&!num&&!/theo nguoi nhan/.test(q)){append(`Bạn thử chọn “bài 2” nhé.`);return;}
         if(target)draft.musicGroup=target===draft.target?'':target;else if(/theo nguoi nhan/.test(q))draft.musicGroup='';draft.track=num?Number(num[1])-1:0;
       }else{
         if(key==='words'||key==='message')limit=1000;else if(key==='signature')limit=80;
@@ -323,7 +318,7 @@
     document.addEventListener('focusin',()=>{if(!opened)schedule();});document.addEventListener('focusout',()=>queueMicrotask(()=>{if(!opened)schedule();}));
     document.addEventListener('visibilitychange',()=>{if(document.hidden){drawing=false;stopTimers();}else schedule();});window.addEventListener('pagehide',stopTimers);
     window.visualViewport?.addEventListener('resize',syncViewport);window.visualViewport?.addEventListener('scroll',syncViewport);window.addEventListener('resize',syncViewport);starter();
-    return {show(value){visible=value;host.hidden=!value;syncViewport();if(value){contextChanged();schedule();}else stopTimers();},contextChanged,createQuick:()=>startQuick(''),react,close:()=>setOpen(false),metrics:()=>({timers:Number(Boolean(idle))+Number(Boolean(expression))+Number(Boolean(nudgeTimer)),draft:Boolean(draft),nudges,acts,opened,otherMusic})};
+    return {show(value){visible=value;host.hidden=!value;syncViewport();if(value){contextChanged();schedule();}else stopTimers();},contextChanged,createQuick:()=>startQuick(''),react,close:()=>setOpen(false),metrics:()=>({timers:Number(Boolean(idle))+Number(Boolean(expression))+Number(Boolean(nudgeTimer)),draft:Boolean(draft),nudges,acts,opened})};
   }
   window.BebeAssistant=Object.freeze({mount,targetFor,topics:faq.length});
 })();

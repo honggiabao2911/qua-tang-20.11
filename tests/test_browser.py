@@ -133,25 +133,33 @@ class CardBrowserTests(unittest.TestCase):
         self.assertTrue(self.page.locator("#background-music").evaluate("el => el.paused"))
         self.page.locator("#start-button").click()
         self.page.wait_for_function("document.querySelector('#recipients').getBoundingClientRect().top < innerHeight")
-        self.assertEqual(6, self.page.locator("button[data-recipient]").count())
+        choices = self.page.locator("#recipients button[data-recipient]")
+        expect(choices).to_have_count(2)
+        expect(choices.nth(0)).to_contain_text("Chúc thầy")
+        expect(choices.nth(1)).to_contain_text("Chúc cô")
+        expect(self.page.locator("#home-screen")).not_to_contain_text("Thiệp 20/10")
 
-    def test_01_all_recipients_variants_and_six_templates(self):
-        for recipient in ("mom", "grandma", "teacher", "sister", "women", "lover"):
-            with self.subTest(recipient=recipient):
-                self.editor(recipient)
-                variants = {"teacher": ["", "thay"], "sister": ["older", "younger"], "women": ["friend", "one", "group"]}.get(recipient, [None])
-                for variant in variants:
-                    with self.subTest(variant=variant):
-                        if variant is not None:
-                            self.page.locator("#variant-field").select_option(variant)
-                        greetings = []
-                        for _ in range(6):
-                            greeting = self.page.locator("#preview-greeting").inner_text().strip()
-                            self.assertTrue(greeting, f"Empty greeting for {recipient}/{variant}")
-                            greetings.append(greeting)
-                            self.page.locator("#next-greeting").click()
-                        self.assertEqual(6, len(set(greetings)), f"Expected six distinct templates: {recipient}/{variant}")
-                        self.assertEqual(greetings[0], self.page.locator("#preview-greeting").inner_text().strip())
+    def test_01_teacher_choices_offer_distinct_greetings_and_tone_filters(self):
+        for variant, address in (("thay", "thầy"), ("", "cô")):
+            with self.subTest(recipient=address):
+                self.visit()
+                self.page.locator(f'#recipients [data-variant="{variant}"]').click()
+                expect(self.page.locator("#recipient-pronoun")).to_have_value(address)
+                picker = self.page.locator("#greeting-template")
+                preview = self.page.locator("#greeting-template-preview")
+                expect(picker.locator("option")).to_have_count(10)
+                texts = set()
+                for index in range(10):
+                    picker.select_option(str(index))
+                    text = preview.inner_text()
+                    self.assertIn(address, text)
+                    expect(self.page.locator("#preview-greeting")).to_have_text(text)
+                    texts.add(text)
+                self.assertEqual(10, len(texts))
+                self.page.locator("#tone-field").select_option("short")
+                expect(picker.locator("option")).to_have_count(2)
+                self.page.locator("#next-greeting").click()
+                expect(picker).to_have_value("1")
 
     def test_teachers_day_share_keeps_occasion_and_teacher_address(self):
         self.mock_clipboard()
@@ -159,9 +167,7 @@ class CardBrowserTests(unittest.TestCase):
         self.page.set_viewport_size({"width": 390, "height": 844})
         expect(self.page.locator(".hero .eyebrow")).to_contain_text("Ngày Nhà giáo Việt Nam")
         self.page.locator("#start-button").click()
-        self.page.get_by_role("button", name="Gửi thầy hoặc cô", exact=False).click()
-        expect(self.page.locator("#recipient-pronoun")).to_have_value("cô")
-        self.page.locator("#variant-field").select_option(label="Thầy giáo")
+        self.page.get_by_role("button", name="Chúc thầy", exact=False).click()
         expect(self.page.locator("#recipient-pronoun")).to_have_value("thầy")
         expect(self.page.locator("#preview-greeting")).to_contain_text("Cảm ơn thầy")
         expect(self.page.locator("#preview-card .paper-date")).to_have_text("20.11")

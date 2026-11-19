@@ -82,8 +82,7 @@
     }
     function answer(text){
       const q=text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').toLowerCase();
-      const targets=[[/\bme\b/,'mom'],[/\bba\b/,'grandma'],[/\bco\b|\bthay\b|giao vien|buc giang/,'teacher'],[/chi gai|em gai|chi em/,'sister'],[/nguoi thuong|tinh yeu|nguoi yeu/,'lover'],[/ban nu|ban be|nhom/,'women']];
-      const target=targets.find(([pattern])=>pattern.test(q))?.[1];
+      const target=/\bco\b|\bthay\b|giao vien|buc giang/.test(q)?'teacher':undefined;
       if(/ngu ngon|buon ngu/.test(q)){append('Mình chợp mắt một chút thôi… Bạn cứ thong thả viết, mình vẫn ở đây nhé.');react('sleep');return;}
       if(/trai tim|thuong be b/.test(q)){append('Một trái tim nhỏ gửi đến bạn nè. Mong hôm nay bạn cũng nhận thật nhiều dịu dàng ♡');react('love');return;}
       if(/^(chao|hi\b|hello|be b oi)/.test(q)){append('Chào bạn! Muốn mình gợi ý mẫu, giúp chọn lời chúc hay tìm phần chữ ký nào?');react('happy');return;}
@@ -93,7 +92,7 @@
       else if(/loi chuc|viet gi|xung ho|loi rieng/.test(q))advice('words',target);
       else if(target||/mau|chu de|goi y|thiep/.test(q))advice('themes',target);
       else if(/chao|de thuong|trai tim|ngu ngon|cuoi/.test(q))advice('play');
-      else{append('Mình có mẹo về mẫu thiệp, lời chúc, nhạc, lời bé B nói và chữ ký. Bạn thử hỏi “mẫu cho mẹ” hoặc chọn một nút bên dưới nhé.');react('curious');}
+      else{append('Mình có mẹo về mẫu thiệp, lời chúc, nhạc, lời bé B nói và chữ ký. Bạn thử hỏi “mẫu cho cô” hoặc chọn một nút bên dưới nhé.');react('curious');}
     }
     toggle.addEventListener('click',()=>setOpen(!opened));
     $('studio-helper-close').addEventListener('click',()=>setOpen(false,true));
